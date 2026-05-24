@@ -7,7 +7,7 @@
 - [*] `outputs/tuning_comparison.csv` saved (new - before/after table)
 - [*] Confusion matrix plot (`09_confusion_matrices.png`) and ROC curves (`08_roc_curves.png`) saved
 - [*] Feature importance plot saved (`10_shap_importance.png` or `10_feature_importance.png`)
-- [ ] Report word count is between 1000 and 1500 words
+- [*] Report word count is between 1000 and 1500 words
 - [ ] All figures are referenced by filename in the report
 - [ ] Harvard referencing: all in-text citations have matching reference entries
 - [ ] No Wikipedia or UKEssays.com sources used
