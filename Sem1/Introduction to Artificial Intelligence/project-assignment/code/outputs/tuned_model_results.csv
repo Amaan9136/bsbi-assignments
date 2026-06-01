@@ -1,0 +1,2 @@
+Model,Accuracy,Precision,Recall,F1,AUC-ROC,Best Params
+Random Forest (Tuned),0.8479448117275079,0.7191011235955056,0.33658903080390684,0.458546571136131,0.7994032207865452,"{'max_depth': 10, 'min_samples_split': 5, 'n_estimators': 200}"
