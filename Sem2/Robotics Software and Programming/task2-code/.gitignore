@@ -1,0 +1,30 @@
+# --- ROS2 / colcon workspace build artefacts ---
+build/
+install/
+log/
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+
+# --- Virtual environments ---
+.venv/
+venv/
+env/
+
+# --- Editor / OS cruft ---
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# --- ROS2 bag files / logs generated during testing ---
+*.bag
+*.db3
+rosject_logs/
+
+# --- Environment / secrets ---
+.env
