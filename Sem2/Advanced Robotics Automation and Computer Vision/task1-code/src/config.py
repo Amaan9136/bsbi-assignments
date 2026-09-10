@@ -66,8 +66,8 @@ class Config:
     # GPU thermal throttling (local GPU protection; ignored if nvidia-smi
     # is unavailable, e.g. on a Kaggle CPU session or non-NVIDIA machine)
     enable_thermal_throttle: bool = True
-    gpu_high_temp_c: int = 90
-    gpu_resume_temp_c: int = 70
+    gpu_high_temp_c: int = 75
+    gpu_resume_temp_c: int = 50
     gpu_temp_poll_seconds: int = 15
     gpu_temp_check_every_n_batches: int = 50
 
