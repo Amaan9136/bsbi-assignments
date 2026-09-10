@@ -5,7 +5,7 @@ TheConstruct.ai. The robot uses HSV colour thresholding on its RGB camera
 feed to detect a coloured marker, then drives toward it using a simple
 rule based controller.
 
-**ROSject name: [INSERT YOUR 10-DIGIT ALPHANUMERIC ROSJECT NAME HERE]**
+**ROSject name: vVGb1L3fxD**
 
 Generate this string yourself (for example using random.org's string
 generator, 10 characters, alphanumeric) before creating the ROSject, and
