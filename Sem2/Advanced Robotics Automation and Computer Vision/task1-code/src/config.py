@@ -58,6 +58,21 @@ class Config:
     # Paths
     output_dir: Path = Path("outputs")
     model_filename: str = "mobilenetv2_plantvillage_drone.pth"
+    checkpoint_filename: str = "training_checkpoint.pth"
+
+    # Multi-GPU
+    use_data_parallel: bool = True
+
+    # GPU thermal throttling (local GPU protection; ignored if nvidia-smi
+    # is unavailable, e.g. on a Kaggle CPU session or non-NVIDIA machine)
+    enable_thermal_throttle: bool = True
+    gpu_high_temp_c: int = 70
+    gpu_resume_temp_c: int = 45
+    gpu_temp_poll_seconds: int = 15
+    gpu_temp_check_every_n_batches: int = 50
+
+    # Resume from a previous run
+    resume_from_checkpoint: bool = True
 
     def __post_init__(self) -> None:
         self.output_dir = Path(self.output_dir)
@@ -68,8 +83,16 @@ class Config:
         return torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     @property
+    def num_gpus(self) -> int:
+        return torch.cuda.device_count() if torch.cuda.is_available() else 0
+
+    @property
     def model_path(self) -> Path:
         return self.output_dir / self.model_filename
+
+    @property
+    def checkpoint_path(self) -> Path:
+        return self.output_dir / self.checkpoint_filename
 
 
 def set_seed(seed: int) -> None:

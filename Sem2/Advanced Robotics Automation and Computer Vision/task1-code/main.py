@@ -49,6 +49,20 @@ def parse_args() -> argparse.Namespace:
         "--skip-plots", action="store_true",
         help="Skip figure generation (useful for quick smoke tests or CI).",
     )
+    parser.add_argument(
+        "--no-data-parallel", action="store_true",
+        help="Disable nn.DataParallel even if multiple GPUs are visible.",
+    )
+    parser.add_argument(
+        "--no-resume", action="store_true",
+        help="Ignore any existing checkpoint and start training from scratch.",
+    )
+    parser.add_argument(
+        "--no-thermal-throttle", action="store_true",
+        help="Disable GPU temperature-based pausing (has no effect without nvidia-smi anyway).",
+    )
+    parser.add_argument("--gpu-high-temp-c", type=int, default=70)
+    parser.add_argument("--gpu-resume-temp-c", type=int, default=45)
     return parser.parse_args()
 
 
@@ -61,9 +75,14 @@ def main() -> int:
         learning_rate=args.lr,
         seed=args.seed,
         output_dir=args.output_dir,
+        use_data_parallel=not args.no_data_parallel,
+        resume_from_checkpoint=not args.no_resume,
+        enable_thermal_throttle=not args.no_thermal_throttle,
+        gpu_high_temp_c=args.gpu_high_temp_c,
+        gpu_resume_temp_c=args.gpu_resume_temp_c,
     )
     set_seed(cfg.seed)
-    logger.info("Using device: %s", cfg.device)
+    logger.info("Using device: %s (GPUs visible: %d)", cfg.device, cfg.num_gpus)
 
     # Data
     train_loader, val_loader, label_names = build_dataloaders(cfg)
@@ -73,7 +92,7 @@ def main() -> int:
         plot_augmented_samples(train_loader, label_names, cfg)
 
     # Model
-    model = build_model(num_classes=len(label_names))
+    model = build_model(num_classes=len(label_names), use_data_parallel=cfg.use_data_parallel)
     param_counts = count_parameters(model)
     logger.info("Model parameters: total=%d trainable=%d", param_counts["total"], param_counts["trainable"])
 
