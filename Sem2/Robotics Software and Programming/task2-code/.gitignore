@@ -28,3 +28,4 @@ rosject_logs/
 
 # --- Environment / secrets ---
 .env
+repomix-output.*

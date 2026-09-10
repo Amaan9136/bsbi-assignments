@@ -39,3 +39,4 @@ datasets/*.gz
 # Output files (keep structure, not contents)
 # outputs/*.png
 # outputs/*.csv
+repomix-output.*
