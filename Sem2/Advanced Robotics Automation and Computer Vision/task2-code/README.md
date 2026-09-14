@@ -7,7 +7,7 @@ rule based controller.
 
 **ROSject name: vVGb1L3fxD**
 
-Generate this string yourself (for example using random.org's string
+Generate this string yourself (for example using random.org's string 
 generator, 10 characters, alphanumeric) before creating the ROSject, and
 record it both here and in the final report, as required by the
 assignment brief.
