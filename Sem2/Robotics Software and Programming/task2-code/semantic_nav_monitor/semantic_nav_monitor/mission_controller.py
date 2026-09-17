@@ -11,17 +11,6 @@ own behaviour throughout. Eight pallet obstacles (two per patrol leg) sit
 near the route so a real run exercises every state repeatedly, not just
 NAVIGATE.
 
-TASK 2 GOAL (what to simulate/observe):
-  1. Launch semantic_nav_monitor.launch.py -> robot spawns at the charging
-     dock checkpoint (0,0) inside the warehouse bay, IDLE.
-  2. Send 'start' (via /hri_command, e.g. using keyboard_hri_node.py) ->
-     robot enters NAVIGATE and drives toward waypoint 1.
-  3. When LIDAR detects a pallet obstacle ahead -> AVOID_OBSTACLE, then
-     REPLAN once clear, then back to NAVIGATE toward the next checkpoint.
-  4. After the fourth checkpoint is reached -> MISSION_COMPLETE.
-  5. monitor_node.py logs every transition and prints mission time,
-     distance travelled and obstacle-encounter (collision-risk) counts.
-
 Implements a five-state finite state machine (Idle, Navigate, AvoidObstacle,
 Replan, MissionComplete), subscribes to /scan and /odom, publishes velocity
 commands on /cmd_vel, publishes state transitions on /mission_state, and
@@ -50,7 +39,6 @@ class MissionState(Enum):
     MISSION_COMPLETE = "MISSION_COMPLETE"
 
 
-# --- Tunable mission parameters -------------------------------------------
 WAYPOINTS = [
     (1.5, 0.0),
     (1.5, 1.5),
@@ -59,16 +47,16 @@ WAYPOINTS = [
 ]
 WAYPOINT_TOLERANCE_M = 0.15
 OBSTACLE_SAFETY_RANGE_M = 0.45
-FORWARD_SECTOR_DEG = 30  # +/- degrees either side of the robot's forward axis
+FORWARD_SECTOR_DEG = 30
 LINEAR_SPEED_MPS = 0.15
 ANGULAR_GAIN = 1.2
 MAX_ANGULAR_SPEED_RADPS = 1.0
 CONTROL_PERIOD_S = 0.1
-CONSECUTIVE_DETECTIONS_REQUIRED = 3  # debounce for obstacle detection
+CONSECUTIVE_DETECTIONS_REQUIRED = 3
+DIAGNOSTIC_THROTTLE_S = 3.0
 
 
 def yaw_from_quaternion(q):
-    """Extract yaw (rotation about Z) from a geometry_msgs Quaternion."""
     siny_cosp = 2.0 * (q.w * q.z + q.x * q.y)
     cosy_cosp = 1.0 - 2.0 * (q.y * q.y + q.z * q.z)
     return math.atan2(siny_cosp, cosy_cosp)
@@ -92,7 +80,6 @@ class MissionController(Node):
             depth=10,
         )
 
-        # Subscriptions
         self.scan_sub = self.create_subscription(
             LaserScan, "/scan", self.scan_callback, sensor_qos
         )
@@ -103,33 +90,42 @@ class MissionController(Node):
             String, "/hri_command", self.hri_callback, 10
         )
 
-        # Publishers
         self.cmd_vel_pub = self.create_publisher(Twist, "/cmd_vel", 10)
         self.state_pub = self.create_publisher(String, "/mission_state", 10)
 
-        # Mission / sensor state
         self.state = MissionState.IDLE
         self.mission_running = False
-        self.current_pose = None          # (x, y, yaw)
+        self.current_pose = None
         self.latest_scan = None
         self.waypoint_index = 0
         self.obstacle_hit_count = 0
 
-        self.publish_state(self.state)  # announce initial state
+        self._odom_received_at_least_once = False
+        self._scan_received_at_least_once = False
+        self._logged_no_odom_since_start = False
+
+        self.publish_state(self.state)
 
         self.control_timer = self.create_timer(
             CONTROL_PERIOD_S, self.control_loop
         )
 
         self.get_logger().info("mission_controller node started in IDLE state.")
+        self.get_logger().info(
+            "Subscribed to /scan and /odom, publishing /cmd_vel and /mission_state, "
+            "listening for /hri_command."
+        )
 
-    # ------------------------------------------------------------------ #
-    # Callbacks
-    # ------------------------------------------------------------------ #
     def scan_callback(self, msg: LaserScan):
+        if not self._scan_received_at_least_once:
+            self._scan_received_at_least_once = True
+            self.get_logger().info("First /scan message received - LIDAR data is flowing.")
         self.latest_scan = msg
 
     def odom_callback(self, msg: Odometry):
+        if not self._odom_received_at_least_once:
+            self._odom_received_at_least_once = True
+            self.get_logger().info("First /odom message received - odometry is flowing.")
         pos = msg.pose.pose.position
         yaw = yaw_from_quaternion(msg.pose.pose.orientation)
         self.current_pose = (pos.x, pos.y, yaw)
@@ -139,10 +135,21 @@ class MissionController(Node):
         self.get_logger().info(f"Received HRI command: '{command}'")
 
         if command == "start":
+            if not self._odom_received_at_least_once:
+                self.get_logger().warn(
+                    "'start' received, but NO /odom message has ever arrived. "
+                    "The robot will stay stationary until odometry is published. "
+                    "Check 'ros2 topic hz /odom' and your ros_gz_bridge / spawn setup."
+                )
             if self.state == MissionState.IDLE:
                 self.mission_running = True
                 self.waypoint_index = 0
+                self._logged_no_odom_since_start = False
                 self.transition_to(MissionState.NAVIGATE)
+            else:
+                self.get_logger().warn(
+                    f"'start' ignored: mission is not IDLE (current state: {self.state.value})."
+                )
         elif command == "pause":
             self.mission_running = False
             self.publish_zero_velocity()
@@ -153,9 +160,6 @@ class MissionController(Node):
         else:
             self.get_logger().warn(f"Unknown HRI command ignored: '{command}'")
 
-    # ------------------------------------------------------------------ #
-    # State machine
-    # ------------------------------------------------------------------ #
     def transition_to(self, new_state: MissionState):
         if new_state != self.state:
             self.get_logger().info(f"State transition: {self.state.value} -> {new_state.value}")
@@ -171,8 +175,6 @@ class MissionController(Node):
         self.cmd_vel_pub.publish(Twist())
 
     def forward_obstacle_distance(self):
-        """Return the minimum valid LIDAR range within the forward sector,
-        or None if no scan has been received yet."""
         if self.latest_scan is None:
             return None
 
@@ -205,7 +207,12 @@ class MissionController(Node):
             return
 
         if self.current_pose is None:
-            return  # wait for first odometry message
+            self.get_logger().warn(
+                "Mission is running but no /odom has been received yet - "
+                "cannot navigate without a pose. Waiting...",
+                throttle_duration_sec=DIAGNOSTIC_THROTTLE_S,
+            )
+            return
 
         obstacle_range = self.forward_obstacle_distance()
         obstacle_detected = (
@@ -224,7 +231,6 @@ class MissionController(Node):
             return
 
         if self.state == MissionState.AVOID_OBSTACLE:
-            # obstacle has cleared: re-orient towards the goal before resuming
             self.transition_to(MissionState.REPLAN)
 
         if self.state == MissionState.REPLAN:
@@ -235,9 +241,6 @@ class MissionController(Node):
             self.run_navigate()
             return
 
-    # ------------------------------------------------------------------ #
-    # Behaviours
-    # ------------------------------------------------------------------ #
     def run_navigate(self):
         if self.waypoint_index >= len(WAYPOINTS):
             self.publish_zero_velocity()
@@ -274,15 +277,12 @@ class MissionController(Node):
             self.transition_to(MissionState.NAVIGATE)
 
     def run_avoid_obstacle(self):
-        # Stop forward motion and rotate away from the obstacle.
         cmd = Twist()
         cmd.linear.x = 0.0
         cmd.angular.z = MAX_ANGULAR_SPEED_RADPS
         self.cmd_vel_pub.publish(cmd)
 
     def run_replan(self):
-        # Re-evaluate heading towards the current waypoint, then hand back to
-        # Navigate on the next control cycle.
         self.publish_zero_velocity()
         self.transition_to(MissionState.NAVIGATE)
 
