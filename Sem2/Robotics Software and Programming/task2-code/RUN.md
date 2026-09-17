@@ -2,6 +2,15 @@
 
 SHELL 1:
 
+Rebuild and source the package:
+
+cd ~/ros2_ws
+source /opt/ros/jazzy/setup.bash
+rm -rf build install log
+colcon build --symlink-install
+source ~/ros2_ws/install/setup.bash
+
+clear
 cd ~/ros2_ws
 colcon build --packages-select semantic_nav_monitor
 source install/setup.bash
@@ -11,8 +20,26 @@ ______________________
 SHELL 2:
 
 cd ~/ros2_ws
+source /opt/ros/jazzy/setup.bash
 source ~/ros2_ws/install/setup.bash
 ros2 run semantic_nav_monitor keyboard_hri_node
+
+or
+
+which keyboard_hri_node
+cd ~/ros2_ws
+ros2 run semantic_nav_monitor keyboard_hri_node
+______________________
+
+check these topics from another shell:
+
+ros2 topic echo /hricommand
+ros2 topic echo /odom
+ros2 topic echo /scan
+ros2 topic echo /cmd_vel
+
+check that the controller is running:
+ros2 node list
 ______________________
 
 ## Gazebo screenshots to include in the report (Task 2)

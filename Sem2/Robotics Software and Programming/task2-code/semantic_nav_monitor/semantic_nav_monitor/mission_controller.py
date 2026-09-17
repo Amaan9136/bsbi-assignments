@@ -16,6 +16,11 @@ Replan, MissionComplete), subscribes to /scan and /odom, publishes velocity
 commands on /cmd_vel, publishes state transitions on /mission_state, and
 accepts simple human-robot-interaction commands on /hri_command
 ("start", "pause", "stop").
+
+NOTE (Jazzy/TB3 port): the authoritative ros_gz_bridge started by
+turtlebot3_gazebo's launch files subscribes to /cmd_vel as
+geometry_msgs/msg/TwistStamped (not plain Twist). We publish TwistStamped
+here so velocity commands actually reach Gazebo.
 """
 
 import math
@@ -27,7 +32,7 @@ from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy
 
 from sensor_msgs.msg import LaserScan
 from nav_msgs.msg import Odometry
-from geometry_msgs.msg import Twist
+from geometry_msgs.msg import TwistStamped
 from std_msgs.msg import String
 
 
@@ -90,7 +95,7 @@ class MissionController(Node):
             String, "/hri_command", self.hri_callback, 10
         )
 
-        self.cmd_vel_pub = self.create_publisher(Twist, "/cmd_vel", 10)
+        self.cmd_vel_pub = self.create_publisher(TwistStamped, "/cmd_vel", 10)
         self.state_pub = self.create_publisher(String, "/mission_state", 10)
 
         self.state = MissionState.IDLE
@@ -171,8 +176,16 @@ class MissionController(Node):
         msg.data = state.value
         self.state_pub.publish(msg)
 
+    def _make_stamped_twist(self, linear_x=0.0, angular_z=0.0):
+        cmd = TwistStamped()
+        cmd.header.stamp = self.get_clock().now().to_msg()
+        cmd.header.frame_id = "base_link"
+        cmd.twist.linear.x = linear_x
+        cmd.twist.angular.z = angular_z
+        return cmd
+
     def publish_zero_velocity(self):
-        self.cmd_vel_pub.publish(Twist())
+        self.cmd_vel_pub.publish(self._make_stamped_twist())
 
     def forward_obstacle_distance(self):
         if self.latest_scan is None:
@@ -265,22 +278,21 @@ class MissionController(Node):
         target_heading = math.atan2(dy, dx)
         heading_error = normalize_angle(target_heading - yaw)
 
-        cmd = Twist()
-        cmd.linear.x = LINEAR_SPEED_MPS
-        cmd.angular.z = max(
+        angular_z = max(
             -MAX_ANGULAR_SPEED_RADPS,
             min(MAX_ANGULAR_SPEED_RADPS, ANGULAR_GAIN * heading_error),
         )
-        self.cmd_vel_pub.publish(cmd)
+        self.cmd_vel_pub.publish(
+            self._make_stamped_twist(linear_x=LINEAR_SPEED_MPS, angular_z=angular_z)
+        )
 
         if self.state != MissionState.NAVIGATE:
             self.transition_to(MissionState.NAVIGATE)
 
     def run_avoid_obstacle(self):
-        cmd = Twist()
-        cmd.linear.x = 0.0
-        cmd.angular.z = MAX_ANGULAR_SPEED_RADPS
-        self.cmd_vel_pub.publish(cmd)
+        self.cmd_vel_pub.publish(
+            self._make_stamped_twist(linear_x=0.0, angular_z=MAX_ANGULAR_SPEED_RADPS)
+        )
 
     def run_replan(self):
         self.publish_zero_velocity()

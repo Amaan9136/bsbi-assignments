@@ -8,9 +8,12 @@ and starts the mission_controller and monitor_node nodes.
 
 USE CASE (Task 2): Warehouse Inspection Patrol Robot.
 
-NOTE (Jazzy port): rewritten to use ros_gz_sim / Gazebo Harmonic instead of
-gazebo_ros (Gazebo Classic), for local WSL ROS2 Jazzy use. See
-README_rosject_notes.md, "Local WSL Jazzy port" section.
+NOTE (Jazzy port): the turtlebot3_gazebo launch files already start their
+own ros_gz_bridge (odom/scan/imu/tf/clock/cmd_vel, with cmd_vel as
+TwistStamped). We do NOT start a second bridge here - a second bridge
+subscribing to /cmd_vel as plain Twist was the actual cause of the robot
+not moving (type mismatch meant the authoritative bridge never received
+mission_controller's velocity commands).
 """
 
 import os
@@ -84,6 +87,7 @@ def generate_launch_description():
         executable="mission_controller",
         name="mission_controller",
         output="screen",
+        parameters=[{"use_sim_time": True}],
     )
 
     monitor_node = Node(
@@ -91,6 +95,7 @@ def generate_launch_description():
         executable="monitor_node",
         name="monitor_node",
         output="screen",
+        parameters=[{"use_sim_time": True}],
     )
 
     return LaunchDescription([
