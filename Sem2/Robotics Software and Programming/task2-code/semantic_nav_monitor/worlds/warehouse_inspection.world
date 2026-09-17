@@ -7,17 +7,22 @@
 
     USE CASE: "Warehouse Inspection Patrol Robot"
     The TurtleBot3 patrols a closed loop of four inspection checkpoints
-    around a small warehouse bay. Two pallet obstacles sit directly on the
-    patrol route so the robot is forced to exercise its AVOID_OBSTACLE and
-    REPLAN states during every run, not just NAVIGATE.
+    around a small warehouse bay. Eight pallet obstacles - two per patrol
+    leg - sit near the route so the robot is forced to exercise its
+    AVOID_OBSTACLE and REPLAN states repeatedly during every run, not just
+    NAVIGATE.
 
   Layout (world frame, metres):
     - Room walls form a ~3.5m x 3.5m enclosed bay: x in [-1.0, 2.5], y in [-1.0, 2.5]
     - Checkpoints (visual-only markers, no collision) sit at the mission's
       four waypoints: (1.5, 0.0), (1.5, 1.5), (0.0, 1.5), (0.0, 0.0)
     - The (0.0, 0.0) checkpoint doubles as the "charging dock" (green)
-    - Pallet obstacle 1 blocks the (1.5,0.0) -> (1.5,1.5) leg
-    - Pallet obstacle 2 blocks the (1.5,1.5) -> (0.0,1.5) leg
+    - Pallet obstacles 1-2 sit on the (1.5,0.0) -> (1.5,1.5) leg
+    - Pallet obstacles 3-4 sit on the (1.5,1.5) -> (0.0,1.5) leg
+    - Pallet obstacles 5-6 sit on the (0.0,1.5) -> (0.0,0.0) leg
+    - Pallet obstacles 7-8 sit on the (0.0,0.0) -> (1.5,0.0) leg
+    - Each pair is offset to opposite sides of the direct line, forming a
+      light chicane with open room on either side to route around
 -->
 <sdf version="1.6">
   <world name="warehouse_inspection">
@@ -97,10 +102,13 @@
       </link>
     </model>
 
-    <!-- ================= Pallet obstacles (force AVOID_OBSTACLE/REPLAN) ================= -->
+    <!-- ================= Pallet obstacles (force AVOID_OBSTACLE/REPLAN) =================
+         Eight obstacles, two per patrol leg, each offset slightly to one side of the
+         direct waypoint-to-waypoint line so they form a light chicane rather than a
+         solid wall - the robot always has open room on one side to route around. -->
     <model name="pallet_obstacle_1">
       <static>true</static>
-      <pose>1.5 0.75 0.15 0 0 0</pose>
+      <pose>1.6 0.4 0.15 0 0 0</pose>
       <link name="link">
         <collision name="collision">
           <geometry><box><size>0.3 0.3 0.3</size></box></geometry>
@@ -114,7 +122,91 @@
 
     <model name="pallet_obstacle_2">
       <static>true</static>
-      <pose>0.75 1.5 0.15 0 0 0</pose>
+      <pose>1.4 1.1 0.15 0 0 0</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><box><size>0.3 0.3 0.3</size></box></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><box><size>0.3 0.3 0.3</size></box></geometry>
+          <material><ambient>0.65 0.45 0.15 1</ambient><diffuse>0.65 0.45 0.15 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="pallet_obstacle_3">
+      <static>true</static>
+      <pose>1.1 1.6 0.15 0 0 0</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><box><size>0.3 0.3 0.3</size></box></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><box><size>0.3 0.3 0.3</size></box></geometry>
+          <material><ambient>0.65 0.45 0.15 1</ambient><diffuse>0.65 0.45 0.15 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="pallet_obstacle_4">
+      <static>true</static>
+      <pose>0.4 1.4 0.15 0 0 0</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><box><size>0.3 0.3 0.3</size></box></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><box><size>0.3 0.3 0.3</size></box></geometry>
+          <material><ambient>0.65 0.45 0.15 1</ambient><diffuse>0.65 0.45 0.15 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="pallet_obstacle_5">
+      <static>true</static>
+      <pose>0.1 1.1 0.15 0 0 0</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><box><size>0.3 0.3 0.3</size></box></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><box><size>0.3 0.3 0.3</size></box></geometry>
+          <material><ambient>0.65 0.45 0.15 1</ambient><diffuse>0.65 0.45 0.15 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="pallet_obstacle_6">
+      <static>true</static>
+      <pose>-0.1 0.4 0.15 0 0 0</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><box><size>0.3 0.3 0.3</size></box></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><box><size>0.3 0.3 0.3</size></box></geometry>
+          <material><ambient>0.65 0.45 0.15 1</ambient><diffuse>0.65 0.45 0.15 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="pallet_obstacle_7">
+      <static>true</static>
+      <pose>0.4 0.1 0.15 0 0 0</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><box><size>0.3 0.3 0.3</size></box></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><box><size>0.3 0.3 0.3</size></box></geometry>
+          <material><ambient>0.65 0.45 0.15 1</ambient><diffuse>0.65 0.45 0.15 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="pallet_obstacle_8">
+      <static>true</static>
+      <pose>1.1 -0.1 0.15 0 0 0</pose>
       <link name="link">
         <collision name="collision">
           <geometry><box><size>0.3 0.3 0.3</size></box></geometry>

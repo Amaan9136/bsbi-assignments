@@ -7,8 +7,9 @@ Goal-oriented mission controller for a TurtleBot3 robot.
 TASK 2 USE CASE: "Warehouse Inspection Patrol Robot"
 The robot's mission is to patrol four inspection checkpoints laid out in the
 custom warehouse_inspection.world (see the worlds/ folder), reporting its
-own behaviour throughout. Two pallet obstacles sit directly on the patrol
-route so a real run exercises every state, not just NAVIGATE.
+own behaviour throughout. Eight pallet obstacles (two per patrol leg) sit
+near the route so a real run exercises every state repeatedly, not just
+NAVIGATE.
 
 TASK 2 GOAL (what to simulate/observe):
   1. Launch semantic_nav_monitor.launch.py -> robot spawns at the charging

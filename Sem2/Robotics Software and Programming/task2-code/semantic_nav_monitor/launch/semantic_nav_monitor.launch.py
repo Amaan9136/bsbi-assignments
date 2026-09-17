@@ -9,7 +9,7 @@ files, and then starts the mission_controller and monitor_node nodes.
 
 USE CASE (Task 2): Warehouse Inspection Patrol Robot.
 The robot patrols four checkpoints around a small warehouse bay, encounters
-two pallet obstacles placed directly on its route, and reports its state
+eight pallet obstacles placed along its route, and reports its state
 and performance metrics throughout the mission.
 
 Assumes the TURTLEBOT3_MODEL environment variable has already been exported

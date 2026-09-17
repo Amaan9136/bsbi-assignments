@@ -10,7 +10,7 @@ rosject_notes = """
 Rosject setup and run instructions: semantic_nav_monitor
 ==========================================================
 Use case: Warehouse Inspection Patrol Robot - patrols 4 checkpoints in the
-custom warehouse_inspection.world, avoiding 2 pallet obstacles on its route.
+custom warehouse_inspection.world, avoiding 8 pallet obstacles on its route.
 
 1. Build the package
    cd ~/ros2_ws

@@ -2,7 +2,7 @@
 
 **Use case:** Warehouse Inspection Patrol Robot - the TurtleBot3 patrols
 four checkpoints in a custom warehouse bay (`worlds/warehouse_inspection.world`),
-avoiding two pallet obstacles placed on its route, while a monitor node logs
+avoiding eight pallet obstacles placed along its route, while a monitor node logs
 its state transitions and performance metrics.
 
 Copy the `semantic_nav_monitor` folder into the `~/ros2_ws/src/` directory of
@@ -29,7 +29,7 @@ export TURTLEBOT3_MODEL=burger
 ros2 launch semantic_nav_monitor semantic_nav_monitor.launch.py
 ```
 
-This loads the custom `warehouse_inspection.world` (walls, two pallet
+This loads the custom `warehouse_inspection.world` (walls, eight pallet
 obstacles, four coloured checkpoint markers, a green charging-dock marker),
 spawns the TurtleBot3 at the dock (0,0), and starts the
 `mission_controller` and `monitor_node` nodes. The robot starts in the

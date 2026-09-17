@@ -9,10 +9,10 @@ avoidance/goal navigation, simple HRI, monitoring/logging).
 
 **Warehouse Inspection Patrol Robot.** The TurtleBot3 patrols a closed loop
 of four checkpoints around a small warehouse bay defined in the custom
-Gazebo world `worlds/warehouse_inspection.world`. Two pallet obstacles sit
-directly on the patrol route, so a normal run forces the robot through
-every FSM state (not just NAVIGATE), and the monitor node reports how the
-mission went.
+Gazebo world `worlds/warehouse_inspection.world`. Eight pallet obstacles (two per patrol leg) sit near
+the route, so a normal run forces the robot through every FSM state (not
+just NAVIGATE) repeatedly, and the monitor node reports how the mission
+went.
 
 ## Folder structure
 
