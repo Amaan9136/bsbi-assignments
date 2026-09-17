@@ -2,13 +2,15 @@ import os
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
+from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, SetEnvironmentVariable
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 
 
 def generate_launch_description():
+    turtlebot3_model_env = SetEnvironmentVariable("TURTLEBOT3_MODEL", "waffle_pi")
+
     camera_topic_arg = DeclareLaunchArgument(
         "camera_topic",
         default_value="/camera/image_raw",
@@ -31,7 +33,7 @@ def generate_launch_description():
         parameters=[{"control_rate": 10.0}],
     )
 
-    ld = LaunchDescription([camera_topic_arg])
+    ld = LaunchDescription([turtlebot3_model_env, camera_topic_arg])
 
     try:
         turtlebot3_gazebo_share = get_package_share_directory("turtlebot3_gazebo")
