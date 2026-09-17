@@ -6,8 +6,10 @@ Passive monitoring node for the semantic_nav_monitor mission.
 
 Subscribes to /mission_state and /odom, logs every state transition with a
 timestamp, and computes simple performance metrics: total mission time, time
-spent in each state, and approximate distance travelled (via odometry
-integration).
+spent in each state, approximate distance travelled (via odometry
+integration), and a count of obstacle encounters (every entry into the
+AVOID_OBSTACLE state), used as the assignment's "collisions" metric since
+the robot is designed to avoid rather than actually collide with obstacles.
 """
 
 import math
@@ -38,6 +40,7 @@ class MonitorNode(Node):
 
         self.last_position = None
         self.total_distance_m = 0.0
+        self.obstacle_encounter_count = 0
 
         # Periodically print a metrics summary so progress is visible even
         # without additional state transitions.
@@ -61,6 +64,7 @@ class MonitorNode(Node):
         self.get_logger().info(f"[STATE CHANGE] {self.current_state} -> {new_state}")
 
         if new_state == "AVOID_OBSTACLE" and self.current_state != "AVOID_OBSTACLE":
+            self.obstacle_encounter_count += 1
             self.get_logger().info("Obstacle detected -> switching to AvoidObstacle")
 
         self.current_state = new_state
@@ -88,8 +92,9 @@ class MonitorNode(Node):
         header = "FINAL MISSION SUMMARY" if final else "Mission summary (in progress)"
 
         self.get_logger().info(f"--- {header} ---")
-        self.get_logger().info(f"  Total mission time : {total_time:.1f} s")
+        self.get_logger().info(f"  Total mission time  : {total_time:.1f} s")
         self.get_logger().info(f"  Distance travelled  : {self.total_distance_m:.2f} m")
+        self.get_logger().info(f"  Obstacle encounters : {self.obstacle_encounter_count}")
         self.get_logger().info("  Time spent per state:")
         for state, seconds in sorted(self.time_in_state.items()):
             self.get_logger().info(f"    {state:<18s}: {seconds:.1f} s")

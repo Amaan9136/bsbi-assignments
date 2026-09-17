@@ -14,6 +14,8 @@ setup(
         ("share/" + package_name, ["package.xml"]),
         (os.path.join("share", package_name, "launch"),
             glob(os.path.join("launch", "*.launch.py"))),
+        (os.path.join("share", package_name, "worlds"),
+            glob(os.path.join("worlds", "*.world"))),
     ],
     install_requires=["setuptools"],
     zip_safe=True,
@@ -29,6 +31,7 @@ setup(
         "console_scripts": [
             "mission_controller = semantic_nav_monitor.mission_controller:main",
             "monitor_node = semantic_nav_monitor.monitor_node:main",
+            "keyboard_hri_node = semantic_nav_monitor.keyboard_hri_node:main",
         ],
     },
 )

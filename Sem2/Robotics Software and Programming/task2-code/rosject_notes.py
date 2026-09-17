@@ -9,6 +9,8 @@ preferred over the README.
 rosject_notes = """
 Rosject setup and run instructions: semantic_nav_monitor
 ==========================================================
+Use case: Warehouse Inspection Patrol Robot - patrols 4 checkpoints in the
+custom warehouse_inspection.world, avoiding 2 pallet obstacles on its route.
 
 1. Build the package
    cd ~/ros2_ws
@@ -18,24 +20,26 @@ Rosject setup and run instructions: semantic_nav_monitor
 2. Set the TurtleBot3 model
    export TURTLEBOT3_MODEL=burger
 
-3. Launch the simulation, mission controller and monitor node
+3. Launch the custom world, mission controller and monitor node
    ros2 launch semantic_nav_monitor semantic_nav_monitor.launch.py
 
-4. Start the mission (second shell)
+4. Give commands (second shell) - live keyboard HRI (preferred):
    source ~/ros2_ws/install/setup.bash
-   ros2 topic pub --once /hri_command std_msgs/String "data: 'start'"
+   ros2 run semantic_nav_monitor keyboard_hri_node
+   Then press: s = start, p = pause, x = stop, q = quit keyboard node
 
-5. Pause or stop the mission
+   Or one-shot topic publish instead:
+   ros2 topic pub --once /hri_command std_msgs/String "data: 'start'"
    ros2 topic pub --once /hri_command std_msgs/String "data: 'pause'"
    ros2 topic pub --once /hri_command std_msgs/String "data: 'stop'"
 
-6. Watch mission state
+5. Watch mission state
    ros2 topic echo /mission_state
 
-7. Optional camera view
+6. Optional camera view
    ros2 run rqt_image_view rqt_image_view
 
-8. Rename this Rosject to a unique 10-character alphanumeric string and
+7. Rename this Rosject to a unique 10-character alphanumeric string and
    quote that name in Section 4.1 of the report.
 """
 

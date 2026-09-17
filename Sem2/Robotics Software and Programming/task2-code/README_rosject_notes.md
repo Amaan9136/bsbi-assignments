@@ -1,5 +1,10 @@
 # Rosject notes: semantic_nav_monitor
 
+**Use case:** Warehouse Inspection Patrol Robot - the TurtleBot3 patrols
+four checkpoints in a custom warehouse bay (`worlds/warehouse_inspection.world`),
+avoiding two pallet obstacles placed on its route, while a monitor node logs
+its state transitions and performance metrics.
+
 Copy the `semantic_nav_monitor` folder into the `~/ros2_ws/src/` directory of
 your Rosject on TheConstruct.ai, then run the following commands from the
 Rosject's shell (Shell #1).
@@ -18,45 +23,67 @@ source install/setup.bash
 export TURTLEBOT3_MODEL=burger
 ```
 
-## 3. Launch the simulation, mission controller and monitor node
+## 3. Launch the custom world, mission controller and monitor node
 
 ```bash
 ros2 launch semantic_nav_monitor semantic_nav_monitor.launch.py
 ```
 
-This brings up the TurtleBot3 Gazebo world together with the
+This loads the custom `warehouse_inspection.world` (walls, two pallet
+obstacles, four coloured checkpoint markers, a green charging-dock marker),
+spawns the TurtleBot3 at the dock (0,0), and starts the
 `mission_controller` and `monitor_node` nodes. The robot starts in the
 `IDLE` state and will not move until it receives a start command.
 
-## 4. Start the mission (from a second shell, Shell #2)
+## 4. Give the robot commands (from a second shell, Shell #2)
+
+Preferred (literal keyboard HRI, no Enter key needed):
+
+```bash
+source ~/ros2_ws/install/setup.bash
+ros2 run semantic_nav_monitor keyboard_hri_node
+```
+
+Then press:
+- `s` to start the mission
+- `p` to pause it
+- `x` to stop it (mission is marked complete)
+- `q` to quit the keyboard node (does not stop the mission)
+
+Alternative (single one-shot commands, no live keypresses):
 
 ```bash
 source ~/ros2_ws/install/setup.bash
 ros2 topic pub --once /hri_command std_msgs/String "data: 'start'"
-```
-
-## 5. Pause or stop the mission at any time
-
-```bash
 ros2 topic pub --once /hri_command std_msgs/String "data: 'pause'"
 ros2 topic pub --once /hri_command std_msgs/String "data: 'stop'"
 ```
 
-## 6. Watch the mission state and monitoring output
+## 5. Watch the mission state and monitoring output
 
 ```bash
 ros2 topic echo /mission_state
 ```
 
 The `monitor_node` also prints state transitions and periodic mission
-summaries (total time, distance travelled, time per state) directly to its
-own console output in Shell #1.
+summaries (total time, distance travelled, obstacle-encounter count, time
+per state) directly to its own console output in Shell #1.
 
-## 7. Inspect the camera feed (optional, if a camera is enabled on the model)
+## 6. Inspect the camera feed (optional, if a camera is enabled on the model)
 
 ```bash
 ros2 run rqt_image_view rqt_image_view
 ```
+
+## 7. What to capture for the report
+
+- A Gazebo screenshot showing the warehouse bay, checkpoints, obstacles and
+  the robot mid-patrol.
+- Terminal screenshots of `mission_controller`/`monitor_node` output showing
+  at least one full IDLE -> NAVIGATE -> AVOID_OBSTACLE -> REPLAN ->
+  NAVIGATE -> MISSION_COMPLETE cycle.
+- The final `monitor_node` summary block (total time, distance, obstacle
+  encounters, time-per-state).
 
 ## 8. Rosject naming requirement
 

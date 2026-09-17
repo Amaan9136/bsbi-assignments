@@ -1,9 +1,18 @@
 # Task 2: Goal-Oriented Autonomous Robot with Monitoring (ROS2)
 
-ROS2 (Humble) ament_python package implementing a five-state mission
+ROS2 ament_python package implementing a five-state mission
 controller and a monitoring node for a TurtleBot3 robot, per the assignment
 brief's Task 2 requirements (state machine, sensor integration, obstacle
 avoidance/goal navigation, simple HRI, monitoring/logging).
+
+## Use case scenario
+
+**Warehouse Inspection Patrol Robot.** The TurtleBot3 patrols a closed loop
+of four checkpoints around a small warehouse bay defined in the custom
+Gazebo world `worlds/warehouse_inspection.world`. Two pallet obstacles sit
+directly on the patrol route, so a normal run forces the robot through
+every FSM state (not just NAVIGATE), and the monitor node reports how the
+mission went.
 
 ## Folder structure
 
@@ -18,26 +27,30 @@ task2_ros2_package/
     ├── setup.py
     ├── setup.cfg
     ├── resource/semantic_nav_monitor
+    ├── worlds/
+    │   └── warehouse_inspection.world  <- custom warehouse bay: walls, 2 pallet
+    │                                      obstacles, 4 checkpoint markers, dock
     ├── launch/
-    │   └── semantic_nav_monitor.launch.py
+    │   └── semantic_nav_monitor.launch.py  <- loads the custom world + spawns robot
     └── semantic_nav_monitor/
         ├── __init__.py
         ├── mission_controller.py   <- 5-state FSM, /scan, /odom, /cmd_vel, /hri_command
-        └── monitor_node.py         <- logs /mission_state, computes metrics from /odom
+        ├── monitor_node.py         <- logs /mission_state, metrics from /odom
+        └── keyboard_hri_node.py    <- live keyboard HRI: s=start, p=pause, x=stop, q=quit
 ```
 
 ## Running on TheConstruct.ai (Rosject)
 
 Copy the `semantic_nav_monitor/` folder into `~/ros2_ws/src/` inside your
 Rosject, then follow `README_rosject_notes.md` (build, export
-`TURTLEBOT3_MODEL`, launch, then publish `start`/`pause`/`stop` on
-`/hri_command` from a second shell).
+`TURTLEBOT3_MODEL`, launch, then either run `keyboard_hri_node` or publish
+`start`/`pause`/`stop` on `/hri_command` from a second shell).
 
-## Running locally in VS Code (Linux, with ROS2 Humble installed)
+## Running locally in VS Code (Linux, with ROS2 installed)
 
 ROS2 + Gazebo + TurtleBot3 requires a Linux environment (native Ubuntu 22.04,
 WSL2, or a dev container) - it will not run natively on Windows/macOS. If you
-have ROS2 Humble and the TurtleBot3 packages installed locally:
+have ROS2 and the TurtleBot3 packages installed locally:
 
 1. Open this folder in VS Code (the official **ROS** extension by
    Microsoft is recommended for syntax highlighting and `colcon` tasks).

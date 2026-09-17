@@ -4,6 +4,23 @@ mission_controller.py
 
 Goal-oriented mission controller for a TurtleBot3 robot.
 
+TASK 2 USE CASE: "Warehouse Inspection Patrol Robot"
+The robot's mission is to patrol four inspection checkpoints laid out in the
+custom warehouse_inspection.world (see the worlds/ folder), reporting its
+own behaviour throughout. Two pallet obstacles sit directly on the patrol
+route so a real run exercises every state, not just NAVIGATE.
+
+TASK 2 GOAL (what to simulate/observe):
+  1. Launch semantic_nav_monitor.launch.py -> robot spawns at the charging
+     dock checkpoint (0,0) inside the warehouse bay, IDLE.
+  2. Send 'start' (via /hri_command, e.g. using keyboard_hri_node.py) ->
+     robot enters NAVIGATE and drives toward waypoint 1.
+  3. When LIDAR detects a pallet obstacle ahead -> AVOID_OBSTACLE, then
+     REPLAN once clear, then back to NAVIGATE toward the next checkpoint.
+  4. After the fourth checkpoint is reached -> MISSION_COMPLETE.
+  5. monitor_node.py logs every transition and prints mission time,
+     distance travelled and obstacle-encounter (collision-risk) counts.
+
 Implements a five-state finite state machine (Idle, Navigate, AvoidObstacle,
 Replan, MissionComplete), subscribes to /scan and /odom, publishes velocity
 commands on /cmd_vel, publishes state transitions on /mission_state, and
