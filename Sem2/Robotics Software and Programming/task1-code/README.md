@@ -42,3 +42,7 @@ moves between poses, Matplotlib visualisation, and a reflection section.
 - No PyTorch or other ML framework is required; semantic roles are assigned
   as static metadata rather than inferred from images (see the reflection
   cell for the rationale and a discussed extension using SceneNet RGB-D).
+
+## Dont forgot this in report
+
+Make sure report text is clear that three was the minimum and six was a deliberate extension, so it doesn't look like i missed the instruction.
