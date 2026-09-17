@@ -13,16 +13,18 @@
     NAVIGATE.
 
   Layout (world frame, metres):
-    - Room walls form a ~3.5m x 3.5m enclosed bay: x in [-1.0, 2.5], y in [-1.0, 2.5]
+    - Room walls form a 7.0m x 7.0m enclosed bay: x in [-2.0, 5.0], y in [-2.0, 5.0]
     - Checkpoints (visual-only markers, no collision) sit at the mission's
-      four waypoints: (1.5, 0.0), (1.5, 1.5), (0.0, 1.5), (0.0, 0.0)
+      four waypoints: (3.0, 0.0), (3.0, 3.0), (0.0, 3.0), (0.0, 0.0)
     - The (0.0, 0.0) checkpoint doubles as the "charging dock" (green)
-    - Pallet obstacles 1-2 sit on the (1.5,0.0) -> (1.5,1.5) leg
-    - Pallet obstacles 3-4 sit on the (1.5,1.5) -> (0.0,1.5) leg
-    - Pallet obstacles 5-6 sit on the (0.0,1.5) -> (0.0,0.0) leg
-    - Pallet obstacles 7-8 sit on the (0.0,0.0) -> (1.5,0.0) leg
-    - Each pair is offset to opposite sides of the direct line, forming a
-      light chicane with open room on either side to route around
+    - Pallet obstacles 1-2 sit on the (0.0,0.0) -> (3.0,0.0) leg
+    - Pallet obstacles 3-4 sit on the (3.0,0.0) -> (3.0,3.0) leg
+    - Pallet obstacles 5-6 sit on the (3.0,3.0) -> (0.0,3.0) leg
+    - Pallet obstacles 7-8 sit on the (0.0,3.0) -> (0.0,0.0) leg
+    - Each pallet in a pair sits 0.9m off the direct waypoint-to-waypoint
+      line, on opposite sides and at different points along the leg, so
+      the robot always has a wide (>1.5m) open corridor on one side and
+      never faces obstacles blocking both sides of the path at once.
 -->
 <sdf version="1.6">
   <world name="warehouse_inspection">
@@ -48,13 +50,13 @@
     <!-- ================= Warehouse bay walls ================= -->
     <model name="wall_north">
       <static>true</static>
-      <pose>0.75 2.5 0.25 0 0 0</pose>
+      <pose>1.5 5.0 0.25 0 0 0</pose>
       <link name="link">
         <collision name="collision">
-          <geometry><box><size>3.6 0.1 0.5</size></box></geometry>
+          <geometry><box><size>7.1 0.1 0.5</size></box></geometry>
         </collision>
         <visual name="visual">
-          <geometry><box><size>3.6 0.1 0.5</size></box></geometry>
+          <geometry><box><size>7.1 0.1 0.5</size></box></geometry>
           <material><ambient>0.5 0.5 0.55 1</ambient><diffuse>0.5 0.5 0.55 1</diffuse></material>
         </visual>
       </link>
@@ -62,13 +64,13 @@
 
     <model name="wall_south">
       <static>true</static>
-      <pose>0.75 -1.0 0.25 0 0 0</pose>
+      <pose>1.5 -2.0 0.25 0 0 0</pose>
       <link name="link">
         <collision name="collision">
-          <geometry><box><size>3.6 0.1 0.5</size></box></geometry>
+          <geometry><box><size>7.1 0.1 0.5</size></box></geometry>
         </collision>
         <visual name="visual">
-          <geometry><box><size>3.6 0.1 0.5</size></box></geometry>
+          <geometry><box><size>7.1 0.1 0.5</size></box></geometry>
           <material><ambient>0.5 0.5 0.55 1</ambient><diffuse>0.5 0.5 0.55 1</diffuse></material>
         </visual>
       </link>
@@ -76,13 +78,13 @@
 
     <model name="wall_east">
       <static>true</static>
-      <pose>2.5 0.75 0.25 0 0 0</pose>
+      <pose>5.0 1.5 0.25 0 0 0</pose>
       <link name="link">
         <collision name="collision">
-          <geometry><box><size>0.1 3.6 0.5</size></box></geometry>
+          <geometry><box><size>0.1 7.1 0.5</size></box></geometry>
         </collision>
         <visual name="visual">
-          <geometry><box><size>0.1 3.6 0.5</size></box></geometry>
+          <geometry><box><size>0.1 7.1 0.5</size></box></geometry>
           <material><ambient>0.5 0.5 0.55 1</ambient><diffuse>0.5 0.5 0.55 1</diffuse></material>
         </visual>
       </link>
@@ -90,25 +92,26 @@
 
     <model name="wall_west">
       <static>true</static>
-      <pose>-1.0 0.75 0.25 0 0 0</pose>
+      <pose>-2.0 1.5 0.25 0 0 0</pose>
       <link name="link">
         <collision name="collision">
-          <geometry><box><size>0.1 3.6 0.5</size></box></geometry>
+          <geometry><box><size>0.1 7.1 0.5</size></box></geometry>
         </collision>
         <visual name="visual">
-          <geometry><box><size>0.1 3.6 0.5</size></box></geometry>
+          <geometry><box><size>0.1 7.1 0.5</size></box></geometry>
           <material><ambient>0.5 0.5 0.55 1</ambient><diffuse>0.5 0.5 0.55 1</diffuse></material>
         </visual>
       </link>
     </model>
 
     <!-- ================= Pallet obstacles (force AVOID_OBSTACLE/REPLAN) =================
-         Eight obstacles, two per patrol leg, each offset slightly to one side of the
-         direct waypoint-to-waypoint line so they form a light chicane rather than a
-         solid wall - the robot always has open room on one side to route around. -->
+         Eight obstacles, two per patrol leg, each offset 0.9m to one side of the
+         direct waypoint-to-waypoint line and staggered along the leg, so they form
+         a light chicane with a wide (>1.5m) open corridor on one side at any point
+         along the route - never a pincer that blocks both sides at once. -->
     <model name="pallet_obstacle_1">
       <static>true</static>
-      <pose>1.6 0.4 0.15 0 0 0</pose>
+      <pose>1.05 0.90 0.15 0 0 0</pose>
       <link name="link">
         <collision name="collision">
           <geometry><box><size>0.3 0.3 0.3</size></box></geometry>
@@ -122,7 +125,7 @@
 
     <model name="pallet_obstacle_2">
       <static>true</static>
-      <pose>1.4 1.1 0.15 0 0 0</pose>
+      <pose>1.95 -0.90 0.15 0 0 0</pose>
       <link name="link">
         <collision name="collision">
           <geometry><box><size>0.3 0.3 0.3</size></box></geometry>
@@ -136,7 +139,7 @@
 
     <model name="pallet_obstacle_3">
       <static>true</static>
-      <pose>1.1 1.6 0.15 0 0 0</pose>
+      <pose>2.10 1.05 0.15 0 0 0</pose>
       <link name="link">
         <collision name="collision">
           <geometry><box><size>0.3 0.3 0.3</size></box></geometry>
@@ -150,7 +153,7 @@
 
     <model name="pallet_obstacle_4">
       <static>true</static>
-      <pose>0.4 1.4 0.15 0 0 0</pose>
+      <pose>3.90 1.95 0.15 0 0 0</pose>
       <link name="link">
         <collision name="collision">
           <geometry><box><size>0.3 0.3 0.3</size></box></geometry>
@@ -164,7 +167,7 @@
 
     <model name="pallet_obstacle_5">
       <static>true</static>
-      <pose>0.1 1.1 0.15 0 0 0</pose>
+      <pose>1.95 2.10 0.15 0 0 0</pose>
       <link name="link">
         <collision name="collision">
           <geometry><box><size>0.3 0.3 0.3</size></box></geometry>
@@ -178,7 +181,7 @@
 
     <model name="pallet_obstacle_6">
       <static>true</static>
-      <pose>-0.1 0.4 0.15 0 0 0</pose>
+      <pose>1.05 3.90 0.15 0 0 0</pose>
       <link name="link">
         <collision name="collision">
           <geometry><box><size>0.3 0.3 0.3</size></box></geometry>
@@ -192,7 +195,7 @@
 
     <model name="pallet_obstacle_7">
       <static>true</static>
-      <pose>0.4 0.1 0.15 0 0 0</pose>
+      <pose>0.90 1.95 0.15 0 0 0</pose>
       <link name="link">
         <collision name="collision">
           <geometry><box><size>0.3 0.3 0.3</size></box></geometry>
@@ -206,7 +209,7 @@
 
     <model name="pallet_obstacle_8">
       <static>true</static>
-      <pose>1.1 -0.1 0.15 0 0 0</pose>
+      <pose>-0.90 1.05 0.15 0 0 0</pose>
       <link name="link">
         <collision name="collision">
           <geometry><box><size>0.3 0.3 0.3</size></box></geometry>
@@ -221,7 +224,7 @@
     <!-- ================= Inspection checkpoint markers (visual-only, no collision) ================= -->
     <model name="checkpoint_marker_1">
       <static>true</static>
-      <pose>1.5 0.0 0.15 0 0 0</pose>
+      <pose>3.0 0.0 0.15 0 0 0</pose>
       <link name="link">
         <visual name="visual">
           <geometry><cylinder><radius>0.08</radius><length>0.3</length></cylinder></geometry>
@@ -232,7 +235,7 @@
 
     <model name="checkpoint_marker_2">
       <static>true</static>
-      <pose>1.5 1.5 0.15 0 0 0</pose>
+      <pose>3.0 3.0 0.15 0 0 0</pose>
       <link name="link">
         <visual name="visual">
           <geometry><cylinder><radius>0.08</radius><length>0.3</length></cylinder></geometry>
@@ -243,7 +246,7 @@
 
     <model name="checkpoint_marker_3">
       <static>true</static>
-      <pose>0.0 1.5 0.15 0 0 0</pose>
+      <pose>0.0 3.0 0.15 0 0 0</pose>
       <link name="link">
         <visual name="visual">
           <geometry><cylinder><radius>0.08</radius><length>0.3</length></cylinder></geometry>

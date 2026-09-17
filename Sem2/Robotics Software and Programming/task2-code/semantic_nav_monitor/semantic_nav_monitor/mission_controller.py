@@ -45,19 +45,25 @@ class MissionState(Enum):
 
 
 WAYPOINTS = [
-    (1.5, 0.0),
-    (1.5, 1.5),
-    (0.0, 1.5),
+    (3.0, 0.0),
+    (3.0, 3.0),
+    (0.0, 3.0),
     (0.0, 0.0),
 ]
 WAYPOINT_TOLERANCE_M = 0.15
 OBSTACLE_SAFETY_RANGE_M = 0.45
+SIDE_SECTOR_DEG = 70
 FORWARD_SECTOR_DEG = 30
 LINEAR_SPEED_MPS = 0.15
 ANGULAR_GAIN = 1.2
 MAX_ANGULAR_SPEED_RADPS = 1.0
 CONTROL_PERIOD_S = 0.1
 CONSECUTIVE_DETECTIONS_REQUIRED = 3
+CLEAR_DETECTIONS_REQUIRED = 10
+REVERSE_DURATION_S = 1.0
+REVERSE_SPEED_MPS = -0.1
+TURN_MAX_DURATION_S = 3.0
+MAX_AVOID_ATTEMPTS = 6
 DIAGNOSTIC_THROTTLE_S = 3.0
 
 
@@ -104,6 +110,11 @@ class MissionController(Node):
         self.latest_scan = None
         self.waypoint_index = 0
         self.obstacle_hit_count = 0
+        self.clear_count = 0
+        self.avoid_attempts = 0
+        self.avoid_phase = "REVERSE"
+        self.avoid_phase_ticks = 0
+        self.avoid_turn_direction = 1.0
 
         self._odom_received_at_least_once = False
         self._scan_received_at_least_once = False
@@ -149,6 +160,9 @@ class MissionController(Node):
             if self.state == MissionState.IDLE:
                 self.mission_running = True
                 self.waypoint_index = 0
+                self.obstacle_hit_count = 0
+                self.clear_count = 0
+                self.avoid_attempts = 0
                 self._logged_no_odom_since_start = False
                 self.transition_to(MissionState.NAVIGATE)
             else:
@@ -210,6 +224,36 @@ class MissionController(Node):
 
         return min_range if found else None
 
+    def side_clearance(self):
+        if self.latest_scan is None:
+            return None, None
+
+        scan = self.latest_scan
+        if len(scan.ranges) == 0:
+            return None, None
+
+        side_rad = math.radians(SIDE_SECTOR_DEG)
+        forward_rad = math.radians(FORWARD_SECTOR_DEG)
+        left_min = float("inf")
+        right_min = float("inf")
+        left_found = False
+        right_found = False
+
+        for i, r in enumerate(scan.ranges):
+            angle = normalize_angle(scan.angle_min + i * scan.angle_increment)
+            if not (scan.range_min <= r <= scan.range_max):
+                continue
+            if forward_rad < angle <= side_rad:
+                left_found = True
+                left_min = min(left_min, r)
+            elif -side_rad <= angle < -forward_rad:
+                right_found = True
+                right_min = min(right_min, r)
+
+        left = left_min if left_found else None
+        right = right_min if right_found else None
+        return left, right
+
     def control_loop(self):
         if self.state == MissionState.IDLE:
             self.publish_zero_velocity()
@@ -237,22 +281,80 @@ class MissionController(Node):
         else:
             self.obstacle_hit_count = 0
 
-        if self.obstacle_hit_count >= CONSECUTIVE_DETECTIONS_REQUIRED:
-            if self.state != MissionState.AVOID_OBSTACLE:
-                self.transition_to(MissionState.AVOID_OBSTACLE)
-            self.run_avoid_obstacle()
+        if self.state == MissionState.NAVIGATE:
+            if self.obstacle_hit_count >= CONSECUTIVE_DETECTIONS_REQUIRED:
+                self.start_avoidance_attempt(first=True)
+                self.run_avoid_obstacle()
+                return
+            self.run_navigate()
             return
 
         if self.state == MissionState.AVOID_OBSTACLE:
-            self.transition_to(MissionState.REPLAN)
+            self.step_avoid_obstacle(obstacle_detected)
+            return
 
         if self.state == MissionState.REPLAN:
-            self.run_replan()
+            self.step_replan(obstacle_detected)
             return
 
-        if self.state in (MissionState.NAVIGATE, MissionState.REPLAN):
-            self.run_navigate()
+    def start_avoidance_attempt(self, first):
+        self.avoid_attempts = 1 if first else self.avoid_attempts + 1
+        self.avoid_phase = "REVERSE"
+        self.avoid_phase_ticks = 0
+        left, right = self.side_clearance()
+        if left is not None and right is not None:
+            self.avoid_turn_direction = 1.0 if left >= right else -1.0
+        elif left is not None:
+            self.avoid_turn_direction = 1.0
+        elif right is not None:
+            self.avoid_turn_direction = -1.0
+        self.transition_to(MissionState.AVOID_OBSTACLE)
+
+    def step_avoid_obstacle(self, obstacle_detected):
+        if self.avoid_attempts > MAX_AVOID_ATTEMPTS:
+            self.get_logger().error(
+                f"Unable to clear obstacle after {MAX_AVOID_ATTEMPTS} attempts. "
+                "Holding position and awaiting operator intervention.",
+                throttle_duration_sec=DIAGNOSTIC_THROTTLE_S,
+            )
+            self.publish_zero_velocity()
             return
+
+        if self.avoid_phase == "TURN" and not obstacle_detected:
+            self.clear_count = 0
+            self.transition_to(MissionState.REPLAN)
+            return
+
+        if self.avoid_phase == "TURN":
+            self.avoid_phase_ticks += 1
+            if self.avoid_phase_ticks * CONTROL_PERIOD_S >= TURN_MAX_DURATION_S:
+                self.get_logger().warn(
+                    f"Avoidance attempt {self.avoid_attempts} timed out without "
+                    "clearing the forward sector; backing up and retrying."
+                )
+                self.start_avoidance_attempt(first=False)
+                self.run_avoid_obstacle()
+                return
+
+        self.run_avoid_obstacle()
+
+    def step_replan(self, obstacle_detected):
+        if self.obstacle_hit_count >= CONSECUTIVE_DETECTIONS_REQUIRED:
+            self.start_avoidance_attempt(first=False)
+            self.run_avoid_obstacle()
+            return
+
+        self.publish_zero_velocity()
+        if obstacle_detected:
+            self.clear_count = 0
+            return
+        self.clear_count += 1
+        if self.clear_count < CLEAR_DETECTIONS_REQUIRED:
+            return
+        self.clear_count = 0
+        self.obstacle_hit_count = 0
+        self.avoid_attempts = 0
+        self.transition_to(MissionState.NAVIGATE)
 
     def run_navigate(self):
         if self.waypoint_index >= len(WAYPOINTS):
@@ -290,13 +392,22 @@ class MissionController(Node):
             self.transition_to(MissionState.NAVIGATE)
 
     def run_avoid_obstacle(self):
-        self.cmd_vel_pub.publish(
-            self._make_stamped_twist(linear_x=0.0, angular_z=MAX_ANGULAR_SPEED_RADPS)
-        )
+        if self.avoid_phase == "REVERSE":
+            self.cmd_vel_pub.publish(
+                self._make_stamped_twist(linear_x=REVERSE_SPEED_MPS, angular_z=0.0)
+            )
+            self.avoid_phase_ticks += 1
+            if self.avoid_phase_ticks * CONTROL_PERIOD_S >= REVERSE_DURATION_S:
+                self.avoid_phase = "TURN"
+                self.avoid_phase_ticks = 0
+            return
 
-    def run_replan(self):
-        self.publish_zero_velocity()
-        self.transition_to(MissionState.NAVIGATE)
+        self.cmd_vel_pub.publish(
+            self._make_stamped_twist(
+                linear_x=0.0,
+                angular_z=self.avoid_turn_direction * MAX_ANGULAR_SPEED_RADPS,
+            )
+        )
 
 
 def main(args=None):

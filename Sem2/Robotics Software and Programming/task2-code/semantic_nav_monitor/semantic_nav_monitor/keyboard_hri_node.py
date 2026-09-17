@@ -19,6 +19,7 @@ Run this in its own terminal, alongside semantic_nav_monitor.launch.py.
 
 import sys
 import termios
+import time
 import tty
 
 import rclpy
@@ -47,9 +48,22 @@ class KeyboardHRINode(Node):
     def __init__(self):
         super().__init__("keyboard_hri_node")
         self.hri_pub = self.create_publisher(String, "/hri_command", 10)
+        self._wait_for_subscriber(timeout_sec=5.0)
         self.get_logger().info(
             "keyboard_hri_node ready. Press 's' start / 'p' pause / 'x' stop / 'q' quit."
         )
+
+    def _wait_for_subscriber(self, timeout_sec):
+        start = time.monotonic()
+        while rclpy.ok() and self.hri_pub.get_subscription_count() == 0:
+            if time.monotonic() - start >= timeout_sec:
+                self.get_logger().warn(
+                    "No subscriber on /hri_command after "
+                    f"{timeout_sec:.0f}s (is mission_controller running?). "
+                    "Commands sent now may be missed until it connects."
+                )
+                return
+            rclpy.spin_once(self, timeout_sec=0.1)
 
     def publish_command(self, command):
         msg = String()
