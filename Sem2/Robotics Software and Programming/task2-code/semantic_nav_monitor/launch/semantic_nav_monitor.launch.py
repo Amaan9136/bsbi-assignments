@@ -7,17 +7,14 @@ mission_controller and monitor_node nodes from this package.
 
 Assumes the TURTLEBOT3_MODEL environment variable has already been exported
 (for example: export TURTLEBOT3_MODEL=burger) before running this launch file,
-and that the turtlebot3_gazebo package is available on the ROS2 package path,
-as is the case in a standard TheConstruct.ai TurtleBot3 Rosject.
+and that the turtlebot3_gazebo package is available on the ROS2 package path.
 """
-
-import os
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import IncludeLaunchDescription, DeclareLaunchArgument
 from launch.launch_description_sources import PythonLaunchDescriptionSource
-from launch.substitutions import LaunchConfiguration
+from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
 from launch_ros.actions import Node
 
 
@@ -32,8 +29,8 @@ def generate_launch_description():
 
     turtlebot3_world_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
-            os.path.join(
-                turtlebot3_gazebo_dir, "launch", LaunchConfiguration("world")
+            PathJoinSubstitution(
+                [turtlebot3_gazebo_dir, "launch", LaunchConfiguration("world")]
             )
         )
     )
