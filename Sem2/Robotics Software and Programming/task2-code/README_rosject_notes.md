@@ -5,6 +5,147 @@ four checkpoints in a custom warehouse bay (`worlds/warehouse_inspection.world`)
 avoiding eight pallet obstacles placed along its route, while a monitor node logs
 its state transitions and performance metrics.
 
+---
+
+## My local WSL Jazzy setup (read this first if not on TheConstruct.ai)
+
+This package was originally written for **TheConstruct.ai Rosjects**, which run
+**ROS2 Humble + Gazebo Classic** (`gazebo_ros`). I am running it locally
+instead, on **WSL2, Ubuntu 24.04 "noble", ROS2 Jazzy**, confirmed with:
+
+```bash
+echo $ROS_DISTRO        # -> jazzy
+which gzserver          # -> (empty, Classic not installed)
+which gz                # -> /opt/ros/jazzy/opt/gz_tools_vendor/bin/gz
+ros2 pkg list | grep -E "gazebo_ros|ros_gz_sim"   # -> ros_gz_sim, ros_gz_sim_demos (no gazebo_ros)
+lsb_release -cs          # -> noble
+```
+
+Gazebo Classic does not exist for Jazzy — Jazzy pairs with **new Gazebo
+"Harmonic"** via the `ros_gz_sim` / `ros_gz_bridge` / `ros_gz_image` packages
+instead. Launching the original `gazebo_ros`-based launch file on Jazzy fails
+with:
+
+```
+PackageNotFoundError: "package 'gazebo_ros' not found ..."
+```
+
+### Status: changes already applied on my machine
+
+1. **`launch/semantic_nav_monitor.launch.py` — already Jazzy-ported, no
+   action needed.** The version I copied into `~/ros2_ws/src/semantic_nav_monitor/`
+   already uses `ros_gz_sim`'s `gz_sim.launch.py` (invoked twice — once with
+   `-r -s -v2 <world>` for the server, once with `-g -v2` for the GUI client)
+   instead of the Classic `gzserver.launch.py` / `gzclient.launch.py`
+   includes. This mirrors how TurtleBot3's own
+   `turtlebot3_gazebo/launch/turtlebot3_world.launch.py` does it on Jazzy.
+   `robot_state_publisher.launch.py` and `spawn_turtlebot3.launch.py` from
+   `turtlebot3_gazebo` didn't need changes — on Jazzy they already internally
+   use `ros_gz_sim`/`ros_gz_bridge` (confirmed by inspecting
+   `/opt/ros/jazzy/share/turtlebot3_gazebo/launch/`).
+
+2. **`worlds/warehouse_inspection.world` — patched.** This file still had
+   the two Gazebo-Classic-style includes:
+   ```xml
+   <include><uri>model://sun</uri></include>
+   <include><uri>model://ground_plane</uri></include>
+   ```
+   I replaced them with an inline `<light type="directional" name="sun">`
+   and an inline `<model name="ground_plane">` (plane geometry + collision +
+   visual), because `model://` URIs rely on a Classic-style Gazebo model
+   database / resource path that isn't set up the same way under Harmonic.
+   Inlining removes the dependency entirely — no `GZ_SIM_RESOURCE_PATH`
+   setup needed. Everything else in the world file (walls, pallet obstacles,
+   checkpoint markers, charging dock) is plain SDF geometry/materials with
+   no Classic-only plugins, so it needed no changes.
+
+   The patch was applied via a Python replace script run from
+   `~/ros2_ws/src/semantic_nav_monitor/worlds/`, after saving a backup copy
+   as `warehouse_inspection.world.classic.bak` in the same folder.
+
+3. **`setup.cfg` and `resource/semantic_nav_monitor` — created.** These two
+   files are required by `setup.py` (`script-dir`/`install-scripts` config,
+   and the ament resource-index marker) but were not present in the copied
+   package. `setup.cfg` was created with the standard
+   `[develop]`/`[install]` ament_python content, and an empty
+   `resource/semantic_nav_monitor` marker file was created alongside it, in
+   `~/ros2_ws/src/semantic_nav_monitor/`.
+
+4. **Jazzy/Harmonic + TurtleBot3 packages — installed.** In place of the
+   Humble/Classic equivalents (`ros-humble-gazebo-ros-pkgs` etc.):
+   ```bash
+   sudo apt-get install -y curl lsb-release gnupg
+   sudo curl https://packages.osrfoundation.org/gazebo.gpg \
+     --output /usr/share/keyrings/pkgs-osrf-archive-keyring.gpg
+   echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/pkgs-osrf-archive-keyring.gpg] http://packages.osrfoundation.org/gazebo/ubuntu-stable $(lsb_release -cs) main" \
+     | sudo tee /etc/apt/sources.list.d/gazebo-stable.list > /dev/null
+   sudo apt-get update
+   sudo apt-get install -y gz-harmonic ros-jazzy-ros-gz
+   sudo apt-get install -y ros-jazzy-turtlebot3 ros-jazzy-turtlebot3-msgs ros-jazzy-turtlebot3-simulations
+   ```
+
+5. **Known harmless rosdep warning** — safe to ignore if it appears during
+   `colcon build`:
+   ```
+   semantic_nav_monitor: Cannot locate rosdep definition for [gazebo_ros]
+   ```
+   This is expected: `package.xml` still lists `gazebo_ros` as an
+   `exec_depend` because that's correct for the Rosject/Humble target
+   environment described in the assignment brief. It is not needed at
+   runtime on this Jazzy/Harmonic local setup, since the launch file no
+   longer calls into it.
+
+### Verify before building
+
+Confirm the world-file patch actually took before rebuilding, from
+`~/ros2_ws/src/semantic_nav_monitor/worlds/`:
+
+```bash
+grep -n "model://" warehouse_inspection.world
+```
+
+This should print **nothing**. If it still shows `model://sun` or
+`model://ground_plane`, the patch didn't apply and needs to be re-run before
+continuing.
+
+Also confirm the two added package files are in place, from
+`~/ros2_ws/src/semantic_nav_monitor/`:
+
+```bash
+ls setup.cfg resource/semantic_nav_monitor
+```
+
+Both paths should be listed with no "No such file" errors.
+
+### Build and launch (once verification above is clean)
+
+```bash
+cd ~/ros2_ws
+colcon build --packages-select semantic_nav_monitor
+source install/setup.bash
+export TURTLEBOT3_MODEL=burger
+ros2 launch semantic_nav_monitor semantic_nav_monitor.launch.py
+```
+
+If the Gazebo GUI window fails to open (common on WSL2 without WSLg / on
+Windows 10), that's a separate display issue, not a package issue — the
+simulation server (`gz sim -s`) and the ROS nodes will still be running
+headless; confirm via `ros2 topic echo /mission_state` in another terminal,
+or launch with the GUI disabled by removing the `gz_sim_client_cmd` action
+from the launch file.
+
+If this is later run **on TheConstruct.ai**, use the *original*
+`gazebo_ros`-based launch file and the backed-up
+`warehouse_inspection.world.classic.bak` world file (restored to
+`warehouse_inspection.world`) instead — this Jazzy port is WSL-specific.
+TheConstruct.ai Rosjects are Humble + Gazebo Classic and already have
+`gazebo_ros` available, so no changes are needed there. Keep both versions
+if demoing on both environments.
+
+---
+
+## Original instructions (TheConstruct.ai Rosject, Humble + Gazebo Classic)
+
 Copy the `semantic_nav_monitor` folder into the `~/ros2_ws/src/` directory of
 your Rosject on TheConstruct.ai, then run the following commands from the
 Rosject's shell (Shell #1).

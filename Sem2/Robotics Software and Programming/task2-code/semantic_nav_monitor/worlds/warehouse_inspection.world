@@ -255,10 +255,10 @@
     <!-- Checkpoint 0 doubles as the charging dock: robot starts and mission completes here -->
     <model name="charging_dock_marker">
       <static>true</static>
-      <pose>0.0 0.0 0.15 0 0 0</pose>
+      <pose>0.0 0.0 0.01 0 0 0</pose>
       <link name="link">
         <visual name="visual">
-          <geometry><cylinder><radius>0.1</radius><length>0.3</length></cylinder></geometry>
+          <geometry><cylinder><radius>0.2</radius><length>0.02</length></cylinder></geometry>
           <material><ambient>0.1 0.8 0.2 1</ambient><diffuse>0.1 0.8 0.2 1</diffuse></material>
         </visual>
       </link>

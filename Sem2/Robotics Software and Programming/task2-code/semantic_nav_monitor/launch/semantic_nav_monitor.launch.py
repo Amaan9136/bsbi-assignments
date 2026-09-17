@@ -3,19 +3,14 @@
 semantic_nav_monitor.launch.py
 
 Launches the custom "warehouse_inspection" Gazebo world bundled with this
-package (see worlds/warehouse_inspection.world), spawns a TurtleBot3 into it
-using the standard turtlebot3_gazebo robot_state_publisher/spawn launch
-files, and then starts the mission_controller and monitor_node nodes.
+package, spawns a TurtleBot3 into it using turtlebot3_gazebo's launch files,
+and starts the mission_controller and monitor_node nodes.
 
 USE CASE (Task 2): Warehouse Inspection Patrol Robot.
-The robot patrols four checkpoints around a small warehouse bay, encounters
-eight pallet obstacles placed along its route, and reports its state
-and performance metrics throughout the mission.
 
-Assumes the TURTLEBOT3_MODEL environment variable has already been exported
-(for example: export TURTLEBOT3_MODEL=burger) before running this launch
-file, and that the turtlebot3_gazebo and gazebo_ros packages are available
-on the ROS2 package path (both are preinstalled on TheConstruct.ai ROS2 + TurtleBot3 Rosjects).
+NOTE (Jazzy port): rewritten to use ros_gz_sim / Gazebo Harmonic instead of
+gazebo_ros (Gazebo Classic), for local WSL ROS2 Jazzy use. See
+README_rosject_notes.md, "Local WSL Jazzy port" section.
 """
 
 import os
@@ -31,7 +26,7 @@ from launch_ros.actions import Node
 def generate_launch_description():
     pkg_semantic_nav_monitor = get_package_share_directory("semantic_nav_monitor")
     pkg_turtlebot3_gazebo = get_package_share_directory("turtlebot3_gazebo")
-    pkg_gazebo_ros = get_package_share_directory("gazebo_ros")
+    pkg_ros_gz_sim = get_package_share_directory("ros_gz_sim")
 
     default_world = os.path.join(
         pkg_semantic_nav_monitor, "worlds", "warehouse_inspection.world"
@@ -45,17 +40,24 @@ def generate_launch_description():
     x_pose_arg = DeclareLaunchArgument("x_pose", default_value="0.0")
     y_pose_arg = DeclareLaunchArgument("y_pose", default_value="0.0")
 
-    gzserver_cmd = IncludeLaunchDescription(
+    gz_sim_server_cmd = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
-            os.path.join(pkg_gazebo_ros, "launch", "gzserver.launch.py")
+            os.path.join(pkg_ros_gz_sim, "launch", "gz_sim.launch.py")
         ),
-        launch_arguments={"world": LaunchConfiguration("world")}.items(),
+        launch_arguments={
+            "gz_args": [
+                "-r -s -v2 ",
+                LaunchConfiguration("world"),
+            ],
+            "on_exit_shutdown": "true",
+        }.items(),
     )
 
-    gzclient_cmd = IncludeLaunchDescription(
+    gz_sim_client_cmd = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
-            os.path.join(pkg_gazebo_ros, "launch", "gzclient.launch.py")
-        )
+            os.path.join(pkg_ros_gz_sim, "launch", "gz_sim.launch.py")
+        ),
+        launch_arguments={"gz_args": "-g -v2 "}.items(),
     )
 
     robot_state_publisher_cmd = IncludeLaunchDescription(
@@ -95,8 +97,8 @@ def generate_launch_description():
         world_arg,
         x_pose_arg,
         y_pose_arg,
-        gzserver_cmd,
-        gzclient_cmd,
+        gz_sim_server_cmd,
+        gz_sim_client_cmd,
         robot_state_publisher_cmd,
         spawn_turtlebot_cmd,
         mission_controller_node,
