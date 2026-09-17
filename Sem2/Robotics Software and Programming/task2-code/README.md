@@ -20,7 +20,6 @@ went.
 task2_ros2_package/
 ├── README.md                       <- this file
 ├── README_rosject_notes.md         <- step-by-step run instructions
-├── rosject_notes.py                <- same instructions as a Python string
 ├── .gitignore
 └── semantic_nav_monitor/           <- the actual ROS2 package
     ├── package.xml
