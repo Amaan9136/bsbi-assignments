@@ -10,6 +10,17 @@ cp "$SRC/semantic_nav_monitor/worlds/warehouse_inspection.sdf"   "$DST/worlds/wa
 cp "$SRC/semantic_nav_monitor/config/gui_lidar_on.config"   "$DST/config/gui_lidar_on.config"
 cp "$SRC/semantic_nav_monitor/config/gui_lidar_off.config"   "$DST/config/gui_lidar_off.config"
 ______________________
+## Clear the cache
+pkill -9 -f gz sim server
+pkill -9 -f gzserver
+pkill -9 -f ruby
+killall -9 gz
+kill -9 35189 52740 53432 55066 55067 55101 55542 55543 55544 55546
+ros2 daemon stop
+ps aux | grep -E "gz sim|robot_state_publisher|ros_gz_bridge|spawn"
+rm -rf ~/.gz ~/.ignition ~/.gazebo/log
+ros2 daemon start
+______________________
 
 ## COMMANDS TO RUN:
 
@@ -28,6 +39,9 @@ clear
 cd ~/ros2_ws
 export TURTLEBOT3_MODEL=burger
 ros2 launch semantic_nav_monitor semantic_nav_monitor.launch.py
+
+### Run with camera sensor
+export TURTLEBOT3_MODEL=burger_cam
 ______________________
 ### SHELL 2:
 
@@ -64,11 +78,11 @@ ros2 topic echo /cmd_vel
 ros2 node list
 
 ### node lists
-/keyboard_hri_node
-/mission_controller
-/monitor_node
-/robot_state_publisher
-/ros_gz_bridge
+ros2 run semantic_nav_monitor keyboard_hri_node
+ros2 run semantic_nav_monitor mission_controller
+ros2 run semantic_nav_monitor monitor_node
+ros2 run semantic_nav_monitor robot_state_publisher
+ros2 run semantic_nav_monitor ros_gz_bridge
 ______________________
 ## THINGS TO MENTION IN REPORT
 

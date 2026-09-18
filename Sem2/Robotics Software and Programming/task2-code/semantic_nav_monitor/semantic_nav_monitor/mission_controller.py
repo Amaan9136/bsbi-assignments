@@ -83,7 +83,7 @@ REVERSE_TRIGGER_RANGE_M = 0.30
 REVERSE_DISTANCE_M = 0.12
 REVERSE_SPEED_MPS = -0.1
 REVERSE_MAX_DURATION_S = 2.0
-ESCAPE_PROBE_ANGLES_DEG = [45, 65, 85, 105, 125]
+ESCAPE_PROBE_ANGLES_DEG = [45, 65, 85, 105, 125, 145, 160]
 ESCAPE_PROBE_HALFWIDTH_DEG = 10
 ESCAPE_CLEARANCE_MARGIN_M = 0.35
 ORIENT_YAW_TOLERANCE_RAD = 0.08
@@ -91,7 +91,7 @@ ORIENT_MAX_DURATION_S = 4.0
 REPLAN_LINEAR_SPEED_MPS = 0.12
 REPLAN_DISTANCE_M = 0.5
 REPLAN_MAX_DURATION_S = 6.0
-MAX_AVOID_ATTEMPTS = 6
+MAX_AVOID_ATTEMPTS = 10
 DIAGNOSTIC_THROTTLE_S = 3.0
 STALL_CHECK_DURATION_S = 1.0
 STALL_DISTANCE_THRESHOLD_M = 0.05
@@ -327,7 +327,10 @@ class MissionController(Node):
         return min_range if found else None
 
     def compute_escape_angle(self, direction_sign):
-        required_clearance = OBSTACLE_SAFETY_RANGE_M + ESCAPE_CLEARANCE_MARGIN_M
+        required_clearance = max(
+            OBSTACLE_SAFETY_RANGE_M,
+            OBSTACLE_SAFETY_RANGE_M + ESCAPE_CLEARANCE_MARGIN_M - 0.05 * self.avoid_attempts,
+        )
         for probe_deg in ESCAPE_PROBE_ANGLES_DEG:
             relative_angle = math.radians(probe_deg) * direction_sign
             clearance = self.probe_heading_clearance(relative_angle)

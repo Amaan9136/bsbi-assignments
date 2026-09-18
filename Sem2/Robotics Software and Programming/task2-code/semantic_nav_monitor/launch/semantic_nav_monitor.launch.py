@@ -10,10 +10,15 @@ USE CASE (Task 2): Warehouse Inspection Patrol Robot.
 
 NOTE (Jazzy port): the turtlebot3_gazebo launch files already start their
 own ros_gz_bridge (odom/scan/imu/tf/clock/cmd_vel, with cmd_vel as
-TwistStamped). We do NOT start a second bridge here - a second bridge
-subscribing to /cmd_vel as plain Twist was the actual cause of the robot
-not moving (type mismatch meant the authoritative bridge never received
-mission_controller's velocity commands).
+TwistStamped). We do NOT start a second bridge covering those same topics
+here - a second bridge subscribing to /cmd_vel as plain Twist was the
+actual cause of the robot not moving (type mismatch meant the
+authoritative bridge never received mission_controller's velocity
+commands). The optional camera sensor is enabled by switching
+TURTLEBOT3_MODEL to "burger_cam" (turtlebot3_gazebo ships this URDF
+variant already) - spawn_turtlebot3.launch.py then also starts its own
+gazebo_ros image bridge automatically for any model other than "burger",
+so we do not add a second camera bridge of our own here either.
 """
 
 import os
@@ -56,7 +61,7 @@ def generate_launch_description():
 
     turtlebot3_model_env = SetEnvironmentVariable(
         name="TURTLEBOT3_MODEL",
-        value=os.environ.get("TURTLEBOT3_MODEL", "burger"),
+        value=os.environ.get("TURTLEBOT3_MODEL", "burger_cam"),
     )
 
     gui_config_path = PythonExpression([
@@ -122,6 +127,15 @@ def generate_launch_description():
         parameters=[{"use_sim_time": True}],
     )
 
+    camera_bridge_node = Node(
+        package="ros_gz_bridge",
+        executable="parameter_bridge",
+        name="camera_bridge",
+        arguments=[CAMERA_BRIDGE_TOPIC + CAMERA_BRIDGE_TYPE],
+        parameters=[{"use_sim_time": True}],
+        output="screen",
+    )
+
     return LaunchDescription([
         world_arg,
         x_pose_arg,
@@ -134,4 +148,5 @@ def generate_launch_description():
         spawn_turtlebot_cmd,
         mission_controller_node,
         monitor_node,
+        camera_bridge_node,
     ])

@@ -36,10 +36,13 @@
       the robot's avoidance logic to weight nearby-wall proximity so it
       doesn't turn into the wall.
     - Three small warning-pylon obstacles sit on the (0.0,0.0)->(3.0,0.0)
-      leg, straddling its centerline (y=0): one offset left (y=+0.18), one
-      offset right (y=-0.18), one dead-center (y=0.0), each only partially
-      or fully inside the robot's ~0.23m corridor half-width so the robot
-      must genuinely detect and steer around them, not just pass by.
+      leg, straddling its centerline (y=0) at x=0.80/1.60/2.40: one offset
+      left (y=+0.30), one offset right (y=-0.30), one dead-center (y=0.0).
+      Each is still inside the robot's ~0.23m corridor half-width so the
+      robot must genuinely detect and steer around them, but they are now
+      spaced 0.8m apart so a clear escape heading always exists past the
+      nearest pylon instead of two/three blocking every avoidance angle
+      at once.
 -->
 <sdf version="1.11">
   <world name="warehouse_inspection">
@@ -453,7 +456,7 @@
          half-width, forcing a genuine detect-and-steer-around response. -->
     <model name="path_pylon_left">
       <static>true</static>
-      <pose>1.20 0.18 0.125 0 0 0</pose>
+      <pose>0.80 0.30 0.125 0 0 0</pose>
       <link name="link">
         <collision name="collision">
           <geometry><cylinder><radius>0.09</radius><length>0.25</length></cylinder></geometry>
@@ -467,7 +470,7 @@
 
     <model name="path_pylon_right">
       <static>true</static>
-      <pose>1.60 -0.18 0.125 0 0 0</pose>
+      <pose>1.60 -0.30 0.125 0 0 0</pose>
       <link name="link">
         <collision name="collision">
           <geometry><cylinder><radius>0.09</radius><length>0.25</length></cylinder></geometry>
@@ -481,7 +484,7 @@
 
     <model name="path_pylon_center">
       <static>true</static>
-      <pose>2.00 0.0 0.125 0 0 0</pose>
+      <pose>2.40 0.0 0.125 0 0 0</pose>
       <link name="link">
         <collision name="collision">
           <geometry><cylinder><radius>0.09</radius><length>0.25</length></cylinder></geometry>
