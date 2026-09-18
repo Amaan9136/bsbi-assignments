@@ -20,9 +20,9 @@ import os
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
+from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, SetEnvironmentVariable
 from launch.launch_description_sources import PythonLaunchDescriptionSource
-from launch.substitutions import LaunchConfiguration
+from launch.substitutions import LaunchConfiguration, PythonExpression
 from launch_ros.actions import Node
 
 
@@ -34,6 +34,12 @@ def generate_launch_description():
     default_world = os.path.join(
         pkg_semantic_nav_monitor, "worlds", "warehouse_inspection.sdf"
     )
+    gui_config_lidar_on = os.path.join(
+        pkg_semantic_nav_monitor, "config", "gui_lidar_on.config"
+    )
+    gui_config_lidar_off = os.path.join(
+        pkg_semantic_nav_monitor, "config", "gui_lidar_off.config"
+    )
 
     world_arg = DeclareLaunchArgument(
         "world",
@@ -42,6 +48,22 @@ def generate_launch_description():
     )
     x_pose_arg = DeclareLaunchArgument("x_pose", default_value="0.0")
     y_pose_arg = DeclareLaunchArgument("y_pose", default_value="0.0")
+    show_lidar_arg = DeclareLaunchArgument(
+        "show_lidar",
+        default_value="true",
+        description="Show the LIDAR scan (Visualize Lidar GUI plugin) in the Gazebo client.",
+    )
+
+    turtlebot3_model_env = SetEnvironmentVariable(
+        name="TURTLEBOT3_MODEL",
+        value=os.environ.get("TURTLEBOT3_MODEL", "burger"),
+    )
+
+    gui_config_path = PythonExpression([
+        "'", gui_config_lidar_on, "' if '",
+        LaunchConfiguration("show_lidar"),
+        "' == 'true' else '", gui_config_lidar_off, "'",
+    ])
 
     gz_sim_server_cmd = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
@@ -60,7 +82,9 @@ def generate_launch_description():
         PythonLaunchDescriptionSource(
             os.path.join(pkg_ros_gz_sim, "launch", "gz_sim.launch.py")
         ),
-        launch_arguments={"gz_args": "-g -v2 "}.items(),
+        launch_arguments={
+            "gz_args": ["-g -v2 --gui-config ", gui_config_path],
+        }.items(),
     )
 
     robot_state_publisher_cmd = IncludeLaunchDescription(
@@ -102,6 +126,8 @@ def generate_launch_description():
         world_arg,
         x_pose_arg,
         y_pose_arg,
+        show_lidar_arg,
+        turtlebot3_model_env,
         gz_sim_server_cmd,
         gz_sim_client_cmd,
         robot_state_publisher_cmd,

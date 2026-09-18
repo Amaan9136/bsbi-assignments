@@ -1,12 +1,14 @@
 ## Apply changes to the ~/ros2_ws workspace
 SRC="/mnt/d/0 AMAAN MAIN/Documents/GERMANY/BSBI/BSBI-Assignments/Sem2/Robotics Software and Programming/task2-code"
-DST=~/ros2_ws/src/semantic_nav_monitor
+DST="$HOME/ros2_ws/src/semantic_nav_monitor"
 
 cp "$SRC/semantic_nav_monitor/semantic_nav_monitor/mission_controller.py" "$DST/semantic_nav_monitor/mission_controller.py"
 cp "$SRC/semantic_nav_monitor/semantic_nav_monitor/keyboard_hri_node.py"  "$DST/semantic_nav_monitor/keyboard_hri_node.py"
 cp "$SRC/semantic_nav_monitor/launch/semantic_nav_monitor.launch.py"     "$DST/launch/semantic_nav_monitor.launch.py"
 cp "$SRC/semantic_nav_monitor/setup.py"                                   "$DST/setup.py"
 cp "$SRC/semantic_nav_monitor/worlds/warehouse_inspection.sdf"   "$DST/worlds/warehouse_inspection.sdf"
+cp "$SRC/semantic_nav_monitor/config/gui_lidar_on.config"   "$DST/config/gui_lidar_on.config"
+cp "$SRC/semantic_nav_monitor/config/gui_lidar_off.config"   "$DST/config/gui_lidar_off.config"
 ______________________
 
 ## COMMANDS TO RUN:
@@ -41,16 +43,32 @@ cd ~/ros2_ws
 ros2 run semantic_nav_monitor keyboard_hri_node
 ______________________
 
-check these topics from another shell:
-
-ros2 topic echo /hricommand
+### check these topics from another shell:
+ros2 topic echo /hri_command
 ros2 topic echo /mission_state
 ros2 topic echo /odom
 ros2 topic echo /scan
 ros2 topic echo /cmd_vel
 
-check that the controller is running:
+### other topics
+/clock
+/imu
+/joint_states
+/parameter_events
+/robot_description
+/rosout
+/tf
+/tf_static
+
+### check that the controller is running:
 ros2 node list
+
+### node lists
+/keyboard_hri_node
+/mission_controller
+/monitor_node
+/robot_state_publisher
+/ros_gz_bridge
 ______________________
 ## THINGS TO MENTION IN REPORT
 
