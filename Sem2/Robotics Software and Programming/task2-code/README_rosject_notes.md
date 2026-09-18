@@ -144,7 +144,7 @@ Both paths should be listed with no "No such file" errors.
 cd ~/ros2_ws
 colcon build --packages-select semantic_nav_monitor
 source install/setup.bash
-export TURTLEBOT3_MODEL=burger
+export TURTLEBOT3_MODEL=burger_cam
 ros2 launch semantic_nav_monitor semantic_nav_monitor.launch.py
 ```
 
@@ -189,7 +189,7 @@ source install/setup.bash
 ## 2. Set the TurtleBot3 model
 
 ```bash
-export TURTLEBOT3_MODEL=burger
+export TURTLEBOT3_MODEL=burger_cam
 ```
 
 ## 3. Launch the custom world, mission controller and monitor node

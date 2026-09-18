@@ -35,13 +35,10 @@ colcon build --symlink-install --packages-select semantic_nav_monitor
 source install/setup.bash
 
 ### Run
-clear
 cd ~/ros2_ws
-export TURTLEBOT3_MODEL=burger
-ros2 launch semantic_nav_monitor semantic_nav_monitor.launch.py
-
-### Run with camera sensor
+clear
 export TURTLEBOT3_MODEL=burger_cam
+ros2 launch semantic_nav_monitor semantic_nav_monitor.launch.py
 ______________________
 ### SHELL 2:
 

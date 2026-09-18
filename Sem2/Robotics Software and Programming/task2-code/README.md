@@ -59,7 +59,7 @@ have ROS2 and the TurtleBot3 packages installed locally:
    cd ~/ros2_ws
    colcon build --packages-select semantic_nav_monitor
    source install/setup.bash
-   export TURTLEBOT3_MODEL=burger
+   export TURTLEBOT3_MODEL=burger_cam
    ros2 launch semantic_nav_monitor semantic_nav_monitor.launch.py
    ```
 4. From a second VS Code terminal (also sourced), start the mission:

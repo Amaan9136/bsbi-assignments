@@ -1,3 +1,11 @@
 tasks:
 
-the robot is just rotating in the first corner blue since there is no way to pass by the first corner. so i want to fix it where regardless of corner i want to just make it properly navigate where also move the obstacle from the corners (if assignment's (task 2 brief) allows it to do that) move the corner pieces and make it to navigate in the world of warehouse to properly navigate. current the robot moves avoids obstacles but problem is when the corner is found it just stops and then does this below log:.  i want to avoid spinning in the corner in any better way (can change/move world elements but must be what we are using but satisfying the assignment brief, and only if its needed.) the problem is corners having the obstacles. so you can give a solution to that considering the given brief pdf without removing anything that it says needed.
+fix: devcontainers@Amaan-Ideapad-3:~/ros2_ws$ ros2 launch semantic_nav_monitor semantic_nav_monitor.launch.py
+[INFO] [launch]: All log files can be found below /home/devcontainers/.ros/log/2026-09-18-12-54-59-240730-Amaan-Ideapad-3-4856
+[INFO] [launch]: Default logging verbosity is set to INFO
+[ERROR] [launch]: Caught exception in launch (see debug for traceback): Caught multiple exceptions when trying to load file of format [py]:
+ - NameError: name 'CAMERA_BRIDGE_TOPIC' is not defined
+ - InvalidFrontendLaunchFileError: The launch file may have a syntax error, or its format is unknown
+devcontainers@Amaan-Ideapad-3:~/ros2_ws$ 
+
+i want to properly show the image display filename="ImageDisplay" name="Image Display so fix it to since its not visible in the gazebo sim. i have shared an image of that
