@@ -530,14 +530,19 @@
       </link>
     </model>
 
-    <!-- Checkpoint 0 doubles as the charging dock: robot starts and mission completes here -->
+    <!-- Checkpoint 0 doubles as the charging dock: robot starts and mission completes here.
+         This is a flat floor decal, not a raised pad: radius is kept just outside the
+         TurtleBot3 Burger's ~0.105m footprint and it is thin + semi-transparent so the
+         robot body and its LIDAR mast are always visible sitting on/above it, at any
+         camera angle, instead of the disc visually swallowing the parked robot. -->
     <model name="charging_dock_marker">
       <static>true</static>
-      <pose>0.0 0.0 0.01 0 0 0</pose>
+      <pose>0.0 0.0 0.002 0 0 0</pose>
       <link name="link">
         <visual name="visual">
-          <geometry><cylinder><radius>0.2</radius><length>0.02</length></cylinder></geometry>
+          <geometry><cylinder><radius>0.14</radius><length>0.004</length></cylinder></geometry>
           <material><ambient>0.1 0.8 0.2 1</ambient><diffuse>0.1 0.8 0.2 1</diffuse></material>
+          <transparency>0.55</transparency>
         </visual>
       </link>
     </model>

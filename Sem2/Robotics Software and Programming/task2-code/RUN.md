@@ -76,8 +76,8 @@ ros2 node list
 
 ### node lists
 ros2 run semantic_nav_monitor keyboard_hri_node
-ros2 run semantic_nav_monitor mission_controller
 ros2 run semantic_nav_monitor monitor_node
+ros2 run semantic_nav_monitor mission_controller
 ros2 run semantic_nav_monitor robot_state_publisher
 ros2 run semantic_nav_monitor ros_gz_bridge
 ______________________

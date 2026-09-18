@@ -12,10 +12,11 @@ small centerline obstacles sit near the route so a real run exercises every
 state repeatedly, not just NAVIGATE.
 
 Implements the assignment's five-state finite state machine (Idle, Navigate,
-AvoidObstacle, Replan, MissionComplete), subscribes to /scan and /odom,
-publishes velocity commands on /cmd_vel, publishes state transitions on
-/mission_state, and accepts simple human-robot-interaction commands on
-/hri_command ("start", "pause", "stop").
+AvoidObstacle, Replan, MissionComplete) plus one added Planning state,
+subscribes to /scan and /odom, publishes velocity commands on /cmd_vel,
+publishes state transitions on /mission_state, publishes the pre-computed
+checkpoint route on /planned_path, and accepts simple human-robot-interaction
+commands on /hri_command ("start", "pause", "stop").
 
 AVOID_OBSTACLE / REPLAN previously turned in place until a clear reading came
 back, then handed straight back to NAVIGATE facing the original goal - which
@@ -38,6 +39,50 @@ NOTE (Jazzy/TB3 port): the authoritative ros_gz_bridge started by
 turtlebot3_gazebo's launch files subscribes to /cmd_vel as
 geometry_msgs/msg/TwistStamped (not plain Twist). We publish TwistStamped
 here so velocity commands actually reach Gazebo.
+
+NOTE (patrol speed/labels): LINEAR_SPEED_MPS is 0.22 m/s and
+REPLAN_LINEAR_SPEED_MPS is also 0.22 m/s - both at the TurtleBot3
+Burger's actual top linear speed, so cruise speed cannot go any higher
+without exceeding what the real hardware (and likely the diff-drive
+plugin) supports. Rotation still had headroom below the Burger's 2.84
+rad/s hardware limit, so MAX_ANGULAR_SPEED_RADPS (2.6 rad/s) and
+ANGULAR_GAIN (1.8, how aggressively heading error converts to turn rate)
+were both raised, along with MIN_ORIENT_ANGULAR_SPEED_RADPS (0.8 rad/s,
+the floor speed used while ORIENT is turning to a new heading) and
+REVERSE_SPEED_MPS (-0.20 m/s, still under 0.22 m/s) so every phase of
+motion - cruising, turning, reversing, and the REPLAN commit drive - now
+runs as fast as the hardware realistically allows. Each waypoint also now
+has a human-readable CHECKPOINT_LABELS entry so mission_controller's log
+output reads as a named checkpoint tour ("Checkpoint 2 - North-East
+Corner") rather than bare coordinates.
+
+NOTE (tighter avoidance corridor): compute_escape_angle() picks the
+smallest ESCAPE_PROBE_ANGLES_DEG turn that clears a required_clearance
+distance. That required distance used to start at OBSTACLE_SAFETY_RANGE_M
+(0.45m) + ESCAPE_CLEARANCE_MARGIN_M (0.35m) = 0.80m on the first avoidance
+attempt, which only a wide ~145-160 degree turn could satisfy next to a
+pallet stack, producing a large detour loop instead of a tight sidestep.
+OBSTACLE_SAFETY_RANGE_M/REVERSE_TRIGGER_RANGE_M/OBSTACLE_LATERAL_MARGIN_M
+are now smaller (still comfortably outside the robot's real
+ROBOT_HALF_WIDTH_M) and ESCAPE_CLEARANCE_MARGIN_M is 0.15m, so the first
+attempt only needs ~0.55m of clearance - satisfied by a 45-65 degree turn
+for the pallet spacing in this world - and REPLAN_DISTANCE_M (how far it
+commits along that heading before handing back to NAVIGATE) is shorter
+too, so the robot sidesteps close to its own footprint and rejoins the
+direct waypoint line quickly instead of swinging wide around obstacles.
+
+NOTE (planning step): pressing 's' now moves IDLE -> PLANNING -> NAVIGATE
+instead of straight to NAVIGATE. PLANNING builds the full checkpoint route
+(current pose, then every entry in WAYPOINTS) as a nav_msgs/Path, publishes
+it once on /planned_path (TRANSIENT_LOCAL QoS, so a late subscriber such as
+RViz2 still receives it), then hands off to NAVIGATE immediately - the
+route is fixed and known in advance (this is a checkpoint patrol, not a
+search problem), so there is nothing to wait on. AVOID_OBSTACLE/REPLAN are
+unchanged and still handle any live obstacle the planned straight-line legs
+run into; PLANNING only covers the checkpoint order, not obstacle-aware
+routing. To see the planned route as a drawn line, echo /planned_path or
+add RViz2's Path display subscribed to it - the Gazebo Sim client window
+used elsewhere in this project does not have a built-in path-line display.
 """
 
 import math
@@ -46,16 +91,17 @@ from enum import Enum
 
 import rclpy
 from rclpy.node import Node
-from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy
+from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy, DurabilityPolicy
 
 from sensor_msgs.msg import LaserScan
-from nav_msgs.msg import Odometry
-from geometry_msgs.msg import TwistStamped
+from nav_msgs.msg import Odometry, Path
+from geometry_msgs.msg import TwistStamped, PoseStamped
 from std_msgs.msg import String
 
 
 class MissionState(Enum):
     IDLE = "IDLE"
+    PLANNING = "PLANNING"
     NAVIGATE = "NAVIGATE"
     AVOID_OBSTACLE = "AVOID_OBSTACLE"
     REPLAN = "REPLAN"
@@ -68,32 +114,38 @@ WAYPOINTS = [
     (0.0, 3.0),
     (0.0, 0.0),
 ]
+CHECKPOINT_LABELS = [
+    "Checkpoint 1 - East Aisle",
+    "Checkpoint 2 - North-East Corner",
+    "Checkpoint 3 - North-West Corner",
+    "Checkpoint 0 - Charging Dock",
+]
 WAYPOINT_TOLERANCE_M = 0.15
-OBSTACLE_SAFETY_RANGE_M = 0.45
+OBSTACLE_SAFETY_RANGE_M = 0.40
 SIDE_SECTOR_DEG = 150
 FORWARD_SECTOR_DEG = 30
 ROBOT_HALF_WIDTH_M = 0.11
-OBSTACLE_LATERAL_MARGIN_M = 0.12
-LINEAR_SPEED_MPS = 0.15
-ANGULAR_GAIN = 1.2
-MAX_ANGULAR_SPEED_RADPS = 1.0
+OBSTACLE_LATERAL_MARGIN_M = 0.09
+LINEAR_SPEED_MPS = 0.22
+ANGULAR_GAIN = 1.8
+MAX_ANGULAR_SPEED_RADPS = 2.6
 CONTROL_PERIOD_S = 0.1
 CONSECUTIVE_DETECTIONS_REQUIRED = 3
-REVERSE_TRIGGER_RANGE_M = 0.30
+REVERSE_TRIGGER_RANGE_M = 0.25
 REVERSE_DISTANCE_M = 0.12
-REVERSE_SPEED_MPS = -0.1
+REVERSE_SPEED_MPS = -0.20
 REVERSE_MAX_DURATION_S = 2.0
 ESCAPE_PROBE_ANGLES_DEG = [45, 65, 85, 105, 125, 145, 160]
 ESCAPE_PROBE_HALFWIDTH_DEG = 10
-ESCAPE_CLEARANCE_MARGIN_M = 0.35
+ESCAPE_CLEARANCE_MARGIN_M = 0.15
 ORIENT_YAW_TOLERANCE_RAD = 0.18
 ORIENT_MAX_DURATION_S = 6.0
-MIN_ORIENT_ANGULAR_SPEED_RADPS = 0.35
+MIN_ORIENT_ANGULAR_SPEED_RADPS = 0.8
 ORIENT_DIRECTION_FLIP_AFTER = 2
 ORIENT_STALL_CHECK_S = 1.5
 ORIENT_STALL_YAW_DELTA_RAD = 0.05
-REPLAN_LINEAR_SPEED_MPS = 0.12
-REPLAN_DISTANCE_M = 0.5
+REPLAN_LINEAR_SPEED_MPS = 0.22
+REPLAN_DISTANCE_M = 0.35
 REPLAN_MAX_DURATION_S = 6.0
 MAX_AVOID_ATTEMPTS = 10
 DIAGNOSTIC_THROTTLE_S = 3.0
@@ -138,6 +190,13 @@ class MissionController(Node):
 
         self.cmd_vel_pub = self.create_publisher(TwistStamped, "/cmd_vel", 10)
         self.state_pub = self.create_publisher(String, "/mission_state", 10)
+        path_qos = QoSProfile(
+            reliability=ReliabilityPolicy.RELIABLE,
+            history=HistoryPolicy.KEEP_LAST,
+            depth=1,
+            durability=DurabilityPolicy.TRANSIENT_LOCAL,
+        )
+        self.path_pub = self.create_publisher(Path, "/planned_path", path_qos)
 
         self.state = MissionState.IDLE
         self.mission_running = False
@@ -215,6 +274,17 @@ class MissionController(Node):
                 self._logged_no_odom_since_start = False
                 self.stall_origin = None
                 self.stall_origin_time = None
+                self.transition_to(MissionState.PLANNING)
+                planned_path = self.build_planned_path()
+                self.path_pub.publish(planned_path)
+                self.get_logger().info(
+                    f"Planned route published on /planned_path: "
+                    f"{len(planned_path.poses)} points across "
+                    f"{len(WAYPOINTS)} checkpoints."
+                )
+                self.get_logger().info(
+                    f"Mission started - heading to {CHECKPOINT_LABELS[0]}."
+                )
                 self.transition_to(MissionState.NAVIGATE)
             else:
                 self.get_logger().warn(
@@ -235,6 +305,23 @@ class MissionController(Node):
             self.get_logger().info(f"State transition: {self.state.value} -> {new_state.value}")
             self.state = new_state
             self.publish_state(new_state)
+
+    def build_planned_path(self):
+        path = Path()
+        path.header.frame_id = "odom"
+        path.header.stamp = self.get_clock().now().to_msg()
+        points = []
+        if self.current_pose is not None:
+            points.append((self.current_pose[0], self.current_pose[1]))
+        points.extend(WAYPOINTS)
+        for x, y in points:
+            pose = PoseStamped()
+            pose.header = path.header
+            pose.pose.position.x = x
+            pose.pose.position.y = y
+            pose.pose.orientation.w = 1.0
+            path.poses.append(pose)
+        return path
 
     def publish_state(self, state: MissionState):
         msg = String()
@@ -602,6 +689,9 @@ class MissionController(Node):
         if self.waypoint_index >= len(WAYPOINTS):
             self.publish_zero_velocity()
             self.mission_running = False
+            self.get_logger().info(
+                "All checkpoints visited - back at the charging dock. Mission complete."
+            )
             self.transition_to(MissionState.MISSION_COMPLETE)
             return
 
@@ -614,11 +704,16 @@ class MissionController(Node):
 
         if distance < WAYPOINT_TOLERANCE_M:
             self.get_logger().info(
-                f"Reached waypoint {self.waypoint_index}: ({goal_x:.2f}, {goal_y:.2f})"
+                f"Reached {CHECKPOINT_LABELS[self.waypoint_index]}: "
+                f"({goal_x:.2f}, {goal_y:.2f})"
             )
             self.waypoint_index += 1
             self.stall_origin = None
             self.stall_origin_time = None
+            if self.waypoint_index < len(WAYPOINTS):
+                self.get_logger().info(
+                    f"Next target: {CHECKPOINT_LABELS[self.waypoint_index]}."
+                )
             return
 
         if self.is_stalled(x, y):
