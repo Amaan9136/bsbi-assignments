@@ -86,8 +86,12 @@ REVERSE_MAX_DURATION_S = 2.0
 ESCAPE_PROBE_ANGLES_DEG = [45, 65, 85, 105, 125, 145, 160]
 ESCAPE_PROBE_HALFWIDTH_DEG = 10
 ESCAPE_CLEARANCE_MARGIN_M = 0.35
-ORIENT_YAW_TOLERANCE_RAD = 0.08
-ORIENT_MAX_DURATION_S = 4.0
+ORIENT_YAW_TOLERANCE_RAD = 0.18
+ORIENT_MAX_DURATION_S = 6.0
+MIN_ORIENT_ANGULAR_SPEED_RADPS = 0.35
+ORIENT_DIRECTION_FLIP_AFTER = 2
+ORIENT_STALL_CHECK_S = 1.5
+ORIENT_STALL_YAW_DELTA_RAD = 0.05
 REPLAN_LINEAR_SPEED_MPS = 0.12
 REPLAN_DISTANCE_M = 0.5
 REPLAN_MAX_DURATION_S = 6.0
@@ -148,6 +152,9 @@ class MissionController(Node):
         self.avoid_target_yaw = 0.0
         self.avoid_reverse_origin = None
         self.avoid_commit_origin = None
+        self.avoid_orient_fail_count = 0
+        self.orient_stall_yaw = None
+        self.orient_stall_time = None
 
         self._odom_received_at_least_once = False
         self._scan_received_at_least_once = False
@@ -397,6 +404,8 @@ class MissionController(Node):
 
     def start_avoidance_attempt(self, first):
         self.avoid_attempts = 1 if first else self.avoid_attempts + 1
+        if first:
+            self.avoid_orient_fail_count = 0
         self.stall_origin = None
         self.stall_origin_time = None
 
@@ -421,11 +430,18 @@ class MissionController(Node):
         else:
             self.avoid_turn_direction = 1.0
 
+        if self.avoid_orient_fail_count > 0 and (
+            self.avoid_orient_fail_count % ORIENT_DIRECTION_FLIP_AFTER == 0
+        ):
+            self.avoid_turn_direction *= -1.0
+
         escape_angle = self.compute_escape_angle(self.avoid_turn_direction)
         _, _, yaw = self.current_pose
         self.avoid_target_yaw = normalize_angle(yaw + escape_angle)
         self.avoid_phase = "ORIENT"
         self.avoid_phase_ticks = 0
+        self.orient_stall_yaw = None
+        self.orient_stall_time = None
         self.transition_to(MissionState.AVOID_OBSTACLE)
 
     def enter_replan_phase(self):
@@ -438,10 +454,11 @@ class MissionController(Node):
         if self.avoid_attempts > MAX_AVOID_ATTEMPTS:
             self.get_logger().error(
                 f"Unable to clear obstacle after {MAX_AVOID_ATTEMPTS} attempts. "
-                "Holding position and awaiting operator intervention.",
-                throttle_duration_sec=DIAGNOSTIC_THROTTLE_S,
+                "Stopping and returning to IDLE - press 's' to restart the mission."
             )
             self.publish_zero_velocity()
+            self.mission_running = False
+            self.transition_to(MissionState.IDLE)
             return
 
         if self.avoid_phase == "REVERSE":
@@ -482,10 +499,27 @@ class MissionController(Node):
             self.enter_replan_phase()
             return
 
+        if self.orient_stall_yaw is None:
+            self.orient_stall_yaw = yaw
+            self.orient_stall_time = self.avoid_phase_ticks
+        elif (self.avoid_phase_ticks - self.orient_stall_time) * CONTROL_PERIOD_S >= ORIENT_STALL_CHECK_S:
+            yaw_delta = abs(normalize_angle(yaw - self.orient_stall_yaw))
+            if yaw_delta < ORIENT_STALL_YAW_DELTA_RAD:
+                self.get_logger().warn(
+                    "ORIENT stalled: commanded rotation but yaw has not changed "
+                    "(possible sim/bridge issue) - retrying with a fresh heading."
+                )
+                self.avoid_orient_fail_count += 1
+                self.start_avoidance_attempt(first=False)
+                return
+            self.orient_stall_yaw = yaw
+            self.orient_stall_time = self.avoid_phase_ticks
+
         if self.avoid_phase_ticks * CONTROL_PERIOD_S >= ORIENT_MAX_DURATION_S:
             self.get_logger().warn(
                 f"Avoidance attempt {self.avoid_attempts} timed out while orienting; retrying."
             )
+            self.avoid_orient_fail_count += 1
             self.start_avoidance_attempt(first=False)
             return
 
@@ -493,6 +527,8 @@ class MissionController(Node):
             -MAX_ANGULAR_SPEED_RADPS,
             min(MAX_ANGULAR_SPEED_RADPS, ANGULAR_GAIN * heading_error),
         )
+        if abs(angular_z) < MIN_ORIENT_ANGULAR_SPEED_RADPS:
+            angular_z = math.copysign(MIN_ORIENT_ANGULAR_SPEED_RADPS, angular_z)
         self.cmd_vel_pub.publish(
             self._make_stamped_twist(linear_x=0.0, angular_z=angular_z)
         )
