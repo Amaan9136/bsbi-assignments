@@ -32,7 +32,7 @@ def generate_launch_description():
     pkg_ros_gz_sim = get_package_share_directory("ros_gz_sim")
 
     default_world = os.path.join(
-        pkg_semantic_nav_monitor, "worlds", "warehouse_inspection.world"
+        pkg_semantic_nav_monitor, "worlds", "warehouse_inspection.sdf"
     )
 
     world_arg = DeclareLaunchArgument(

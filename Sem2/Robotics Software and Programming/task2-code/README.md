@@ -9,7 +9,7 @@ avoidance/goal navigation, simple HRI, monitoring/logging).
 
 **Warehouse Inspection Patrol Robot.** The TurtleBot3 patrols a closed loop
 of four checkpoints around a small warehouse bay defined in the custom
-Gazebo world `worlds/warehouse_inspection.world`. Eight pallet obstacles (two per patrol leg) sit near
+Gazebo world `worlds/warehouse_inspection.sdf`. Eight pallet obstacles (two per patrol leg) sit near
 the route, so a normal run forces the robot through every FSM state (not
 just NAVIGATE) repeatedly, and the monitor node reports how the mission
 went.
@@ -27,8 +27,8 @@ task2_ros2_package/
     ├── setup.cfg
     ├── resource/semantic_nav_monitor
     ├── worlds/
-    │   └── warehouse_inspection.world  <- custom warehouse bay: walls, 2 pallet
-    │                                      obstacles, 4 checkpoint markers, dock
+    │   └── warehouse_inspection.sdf    <- custom warehouse bay: walls, 8 pallet
+    │                                      obstacles, 3 checkpoint markers, dock
     ├── launch/
     │   └── semantic_nav_monitor.launch.py  <- loads the custom world + spawns robot
     └── semantic_nav_monitor/

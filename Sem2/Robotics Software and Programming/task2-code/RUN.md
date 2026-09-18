@@ -34,6 +34,7 @@ ______________________
 check these topics from another shell:
 
 ros2 topic echo /hricommand
+ros2 topic echo /mission_state
 ros2 topic echo /odom
 ros2 topic echo /scan
 ros2 topic echo /cmd_vel

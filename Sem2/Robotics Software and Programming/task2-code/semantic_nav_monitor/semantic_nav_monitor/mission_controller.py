@@ -6,7 +6,7 @@ Goal-oriented mission controller for a TurtleBot3 robot.
 
 TASK 2 USE CASE: "Warehouse Inspection Patrol Robot"
 The robot's mission is to patrol four inspection checkpoints laid out in the
-custom warehouse_inspection.world (see the worlds/ folder), reporting its
+custom warehouse_inspection.sdf (see the worlds/ folder), reporting its
 own behaviour throughout. Eight pallet obstacles (two per patrol leg) sit
 near the route so a real run exercises every state repeatedly, not just
 NAVIGATE.
@@ -24,6 +24,7 @@ here so velocity commands actually reach Gazebo.
 """
 
 import math
+import time
 from enum import Enum
 
 import rclpy
@@ -65,6 +66,9 @@ REVERSE_SPEED_MPS = -0.1
 TURN_MAX_DURATION_S = 3.0
 MAX_AVOID_ATTEMPTS = 6
 DIAGNOSTIC_THROTTLE_S = 3.0
+STALL_CHECK_DURATION_S = 2.0
+STALL_DISTANCE_THRESHOLD_M = 0.05
+SCAN_TIMEOUT_WARN_S = 3.0
 
 
 def yaw_from_quaternion(q):
@@ -119,6 +123,10 @@ class MissionController(Node):
         self._odom_received_at_least_once = False
         self._scan_received_at_least_once = False
         self._logged_no_odom_since_start = False
+        self._logged_no_scan_since_start = False
+        self._last_scan_wall_time = None
+        self.stall_origin = None
+        self.stall_origin_time = None
 
         self.publish_state(self.state)
 
@@ -133,9 +141,15 @@ class MissionController(Node):
         )
 
     def scan_callback(self, msg: LaserScan):
+        self._last_scan_wall_time = time.monotonic()
         if not self._scan_received_at_least_once:
             self._scan_received_at_least_once = True
-            self.get_logger().info("First /scan message received - LIDAR data is flowing.")
+            self.get_logger().info(
+                "First /scan message received - LIDAR data is flowing. "
+                f"ranges={len(msg.ranges)} angle_min={msg.angle_min:.3f} "
+                f"angle_max={msg.angle_max:.3f} angle_increment={msg.angle_increment:.5f} "
+                f"range_min={msg.range_min:.3f} range_max={msg.range_max:.3f}"
+            )
         self.latest_scan = msg
 
     def odom_callback(self, msg: Odometry):
@@ -164,6 +178,8 @@ class MissionController(Node):
                 self.clear_count = 0
                 self.avoid_attempts = 0
                 self._logged_no_odom_since_start = False
+                self.stall_origin = None
+                self.stall_origin_time = None
                 self.transition_to(MissionState.NAVIGATE)
             else:
                 self.get_logger().warn(
@@ -218,7 +234,7 @@ class MissionController(Node):
             angle = scan.angle_min + i * scan.angle_increment
             angle = normalize_angle(angle)
             if abs(angle) <= sector_rad:
-                if scan.range_min <= r <= scan.range_max:
+                if 0.0 < r <= scan.range_max:
                     found = True
                     min_range = min(min_range, r)
 
@@ -241,7 +257,7 @@ class MissionController(Node):
 
         for i, r in enumerate(scan.ranges):
             angle = normalize_angle(scan.angle_min + i * scan.angle_increment)
-            if not (scan.range_min <= r <= scan.range_max):
+            if not (0.0 < r <= scan.range_max):
                 continue
             if forward_rad < angle <= side_rad:
                 left_found = True
@@ -270,6 +286,24 @@ class MissionController(Node):
                 throttle_duration_sec=DIAGNOSTIC_THROTTLE_S,
             )
             return
+
+        if not self._scan_received_at_least_once:
+            self.get_logger().warn(
+                "Mission is running but no /scan message has EVER been received. "
+                "Obstacle avoidance is BLIND until this is fixed - the robot will "
+                "drive straight through obstacles. Check 'ros2 topic hz /scan' and "
+                "'ros2 topic info /scan' (QoS) in another terminal.",
+                throttle_duration_sec=DIAGNOSTIC_THROTTLE_S,
+            )
+        elif (
+            self._last_scan_wall_time is not None
+            and time.monotonic() - self._last_scan_wall_time > SCAN_TIMEOUT_WARN_S
+        ):
+            self.get_logger().warn(
+                f"No /scan message received in over {SCAN_TIMEOUT_WARN_S:.0f}s "
+                "(was flowing before, now stopped) - obstacle avoidance is stale.",
+                throttle_duration_sec=DIAGNOSTIC_THROTTLE_S,
+            )
 
         obstacle_range = self.forward_obstacle_distance()
         obstacle_detected = (
@@ -301,6 +335,8 @@ class MissionController(Node):
         self.avoid_attempts = 1 if first else self.avoid_attempts + 1
         self.avoid_phase = "REVERSE"
         self.avoid_phase_ticks = 0
+        self.stall_origin = None
+        self.stall_origin_time = None
         left, right = self.side_clearance()
         if left is not None and right is not None:
             self.avoid_turn_direction = 1.0 if left >= right else -1.0
@@ -356,6 +392,41 @@ class MissionController(Node):
         self.avoid_attempts = 0
         self.transition_to(MissionState.NAVIGATE)
 
+    def is_stalled(self, x, y):
+        """Odometry-based fallback obstacle detector, independent of LIDAR.
+
+        If we've been commanding forward motion for STALL_CHECK_DURATION_S
+        seconds but the robot's actual position has barely changed, it is
+        physically blocked by something - regardless of whether /scan is
+        working, correctly configured, or detecting it. This guarantees the
+        robot can never indefinitely push against an obstacle even if the
+        LIDAR-based detection path is broken for some environment-specific
+        reason.
+        """
+        now = time.monotonic()
+        if self.stall_origin is None:
+            self.stall_origin = (x, y)
+            self.stall_origin_time = now
+            return False
+
+        elapsed = now - self.stall_origin_time
+        if elapsed < STALL_CHECK_DURATION_S:
+            return False
+
+        displacement = math.hypot(x - self.stall_origin[0], y - self.stall_origin[1])
+        self.stall_origin = (x, y)
+        self.stall_origin_time = now
+
+        if displacement < STALL_DISTANCE_THRESHOLD_M:
+            self.get_logger().warn(
+                f"STALL DETECTED (odometry): commanded forward motion for "
+                f"{elapsed:.1f}s but moved only {displacement:.3f}m. Treating as "
+                "a blocked/pushed obstacle regardless of LIDAR state and "
+                "triggering avoidance."
+            )
+            return True
+        return False
+
     def run_navigate(self):
         if self.waypoint_index >= len(WAYPOINTS):
             self.publish_zero_velocity()
@@ -375,6 +446,13 @@ class MissionController(Node):
                 f"Reached waypoint {self.waypoint_index}: ({goal_x:.2f}, {goal_y:.2f})"
             )
             self.waypoint_index += 1
+            self.stall_origin = None
+            self.stall_origin_time = None
+            return
+
+        if self.is_stalled(x, y):
+            self.start_avoidance_attempt(first=True)
+            self.run_avoid_obstacle()
             return
 
         target_heading = math.atan2(dy, dx)

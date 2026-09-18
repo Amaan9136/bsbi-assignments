@@ -1,7 +1,7 @@
 # Rosject notes: semantic_nav_monitor
 
 **Use case:** Warehouse Inspection Patrol Robot - the TurtleBot3 patrols
-four checkpoints in a custom warehouse bay (`worlds/warehouse_inspection.world`),
+four checkpoints in a custom warehouse bay (`worlds/warehouse_inspection.sdf`),
 avoiding eight pallet obstacles placed along its route, while a monitor node logs
 its state transitions and performance metrics.
 
@@ -44,24 +44,43 @@ PackageNotFoundError: "package 'gazebo_ros' not found ..."
    use `ros_gz_sim`/`ros_gz_bridge` (confirmed by inspecting
    `/opt/ros/jazzy/share/turtlebot3_gazebo/launch/`).
 
-2. **`worlds/warehouse_inspection.world` — patched.** This file still had
-   the two Gazebo-Classic-style includes:
-   ```xml
-   <include><uri>model://sun</uri></include>
-   <include><uri>model://ground_plane</uri></include>
-   ```
-   I replaced them with an inline `<light type="directional" name="sun">`
-   and an inline `<model name="ground_plane">` (plane geometry + collision +
-   visual), because `model://` URIs rely on a Classic-style Gazebo model
-   database / resource path that isn't set up the same way under Harmonic.
-   Inlining removes the dependency entirely — no `GZ_SIM_RESOURCE_PATH`
-   setup needed. Everything else in the world file (walls, pallet obstacles,
-   checkpoint markers, charging dock) is plain SDF geometry/materials with
-   no Classic-only plugins, so it needed no changes.
+2. **`worlds/warehouse_inspection.world` → renamed to `warehouse_inspection.sdf`
+   and patched.** Two separate fixes, both confirmed against Open Robotics'
+   own current gz-sim8 (Harmonic) example worlds
+   (github.com/gazebosim/gz-sim, `gz-sim8` branch, `examples/worlds/`):
 
-   The patch was applied via a Python replace script run from
-   `~/ros2_ws/src/semantic_nav_monitor/worlds/`, after saving a backup copy
-   as `warehouse_inspection.world.classic.bak` in the same folder.
+   - **Extension modernized.** Gazebo Harmonic's own shipped example worlds
+     (`shapes.sdf`, `lights.sdf`, etc.) all use the `.sdf` extension, not
+     `.world` — `.world` is a Gazebo-Classic-era convention. `gz sim` itself
+     doesn't actually care about the extension (it parses SDF content
+     regardless of filename), but `.sdf` is the current standard, so the
+     file was renamed and the `<sdf version="...">` header bumped from
+     `1.6` to `1.11` to match the version declared in the official Harmonic
+     example worlds.
+   - **`model://` includes replaced with inline SDF.** The file had the two
+     Gazebo-Classic-style includes:
+     ```xml
+     <include><uri>model://sun</uri></include>
+     <include><uri>model://ground_plane</uri></include>
+     ```
+     These failed to resolve on this WSL install (`gz sim` errored with
+     `Unable to find uri[model://sun]` / `...[model://ground_plane]`,
+     which made the server exit immediately, cascading into a black
+     GUI window and every other launched process being killed). Replaced
+     with an inline `<light type="directional" name="sun">` and an inline
+     `<model name="ground_plane">` (plane geometry + collision + visual) —
+     this is exactly the pattern Open Robotics uses in its own official
+     Harmonic example worlds, and it removes the dependency on
+     `GZ_SIM_RESOURCE_PATH`/Fuel-cache resolution entirely, so it will load
+     the same way on any machine. Everything else in the world file (walls,
+     eight pallet obstacles, three checkpoint markers, charging dock) is
+     plain SDF geometry/materials with no Classic-only plugins, so it
+     needed no changes.
+
+   Both fixes were applied directly to the file at
+   `~/ros2_ws/src/semantic_nav_monitor/worlds/`; the old
+   `warehouse_inspection.world` no longer exists in this package — use
+   `warehouse_inspection.sdf` everywhere from now on.
 
 3. **`setup.cfg` and `resource/semantic_nav_monitor` — created.** These two
    files are required by `setup.py` (`script-dir`/`install-scripts` config,
@@ -101,12 +120,14 @@ Confirm the world-file patch actually took before rebuilding, from
 `~/ros2_ws/src/semantic_nav_monitor/worlds/`:
 
 ```bash
-grep -n "model://" warehouse_inspection.world
+ls warehouse_inspection.sdf          # confirm the renamed file exists
+grep -n "model://" warehouse_inspection.sdf
 ```
 
-This should print **nothing**. If it still shows `model://sun` or
-`model://ground_plane`, the patch didn't apply and needs to be re-run before
-continuing.
+The `grep` should print **nothing**. If `warehouse_inspection.sdf` doesn't
+exist (only the old `.world` name is present), or if `grep` still shows
+`model://sun` or `model://ground_plane`, the update didn't apply and needs
+to be re-copied before continuing.
 
 Also confirm the two added package files are in place, from
 `~/ros2_ws/src/semantic_nav_monitor/`:
@@ -145,6 +166,13 @@ if demoing on both environments.
 ---
 
 ## Original instructions (TheConstruct.ai Rosject, Humble + Gazebo Classic)
+
+**Note:** this section targets a *different* platform (Humble + Gazebo
+Classic on TheConstruct.ai) from the WSL/Jazzy/Harmonic section above, and
+deliberately still refers to `warehouse_inspection.world` — Gazebo Classic
+never adopted the `.sdf` naming convention, so `.world` is correct here.
+Only the Harmonic-targeted copy of the file (used locally on WSL) was
+renamed to `.sdf`.
 
 Copy the `semantic_nav_monitor` folder into the `~/ros2_ws/src/` directory of
 your Rosject on TheConstruct.ai, then run the following commands from the
