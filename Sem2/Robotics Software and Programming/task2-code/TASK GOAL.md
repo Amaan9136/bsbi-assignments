@@ -67,7 +67,7 @@ In this project, “cover” means the robot should patrol the route connecting 
 - Top side: `(3.0, 3.0)` to `(0.0, 3.0)`.
 - Left side: `(0.0, 3.0)` to `(0.0, 0.0)`.
 
-The eight pallet obstacles are deliberately placed near these patrol legs so that the robot is forced to exercise its avoidance and replanning states.
+The pallet obstacles are deliberately placed near these patrol legs so that the robot is forced to exercise its avoidance and replanning states.
 
 ## One-sentence project goal
 

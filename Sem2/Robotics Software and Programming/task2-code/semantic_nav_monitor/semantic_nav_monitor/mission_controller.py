@@ -55,6 +55,8 @@ WAYPOINT_TOLERANCE_M = 0.15
 OBSTACLE_SAFETY_RANGE_M = 0.45
 SIDE_SECTOR_DEG = 70
 FORWARD_SECTOR_DEG = 30
+ROBOT_HALF_WIDTH_M = 0.11
+OBSTACLE_LATERAL_MARGIN_M = 0.12
 LINEAR_SPEED_MPS = 0.15
 ANGULAR_GAIN = 1.2
 MAX_ANGULAR_SPEED_RADPS = 1.0
@@ -66,7 +68,7 @@ REVERSE_SPEED_MPS = -0.1
 TURN_MAX_DURATION_S = 3.0
 MAX_AVOID_ATTEMPTS = 6
 DIAGNOSTIC_THROTTLE_S = 3.0
-STALL_CHECK_DURATION_S = 2.0
+STALL_CHECK_DURATION_S = 1.0
 STALL_DISTANCE_THRESHOLD_M = 0.05
 SCAN_TIMEOUT_WARN_S = 3.0
 
@@ -226,19 +228,25 @@ class MissionController(Node):
         if n == 0:
             return None
 
-        sector_rad = math.radians(FORWARD_SECTOR_DEG)
-        min_range = float("inf")
+        corridor_half_width = ROBOT_HALF_WIDTH_M + OBSTACLE_LATERAL_MARGIN_M
+        min_forward = float("inf")
         found = False
 
         for i, r in enumerate(scan.ranges):
-            angle = scan.angle_min + i * scan.angle_increment
-            angle = normalize_angle(angle)
-            if abs(angle) <= sector_rad:
-                if 0.0 < r <= scan.range_max:
-                    found = True
-                    min_range = min(min_range, r)
+            if not (0.0 < r <= scan.range_max):
+                continue
+            angle = normalize_angle(scan.angle_min + i * scan.angle_increment)
+            if abs(angle) >= math.pi / 2.0:
+                continue
+            forward = r * math.cos(angle)
+            lateral = r * math.sin(angle)
+            if forward <= 0.0:
+                continue
+            if abs(lateral) <= corridor_half_width:
+                found = True
+                min_forward = min(min_forward, forward)
 
-        return min_range if found else None
+        return min_forward if found else None
 
     def side_clearance(self):
         if self.latest_scan is None:
