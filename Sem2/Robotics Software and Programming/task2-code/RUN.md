@@ -2,14 +2,18 @@
 SRC="/mnt/d/0 AMAAN MAIN/Documents/GERMANY/BSBI/BSBI-Assignments/Sem2/Robotics Software and Programming/task2-code"
 DST="$HOME/ros2_ws/src/semantic_nav_monitor"
 
-cp "$SRC/semantic_nav_monitor/semantic_nav_monitor/mission_controller.py" "$DST/semantic_nav_monitor/mission_controller.py"
-cp "$SRC/semantic_nav_monitor/semantic_nav_monitor/keyboard_hri_node.py"  "$DST/semantic_nav_monitor/keyboard_hri_node.py"
-cp "$SRC/semantic_nav_monitor/semantic_nav_monitor/path_visualizer_node.py"   "$DST/semantic_nav_monitor/path_visualizer_node.py"
-cp "$SRC/semantic_nav_monitor/launch/semantic_nav_monitor.launch.py"     "$DST/launch/semantic_nav_monitor.launch.py"
-cp "$SRC/semantic_nav_monitor/setup.py"                                   "$DST/setup.py"
-cp "$SRC/semantic_nav_monitor/worlds/warehouse_inspection.sdf"   "$DST/worlds/warehouse_inspection.sdf"
 cp "$SRC/semantic_nav_monitor/config/gui_lidar_on.config"   "$DST/config/gui_lidar_on.config"
 cp "$SRC/semantic_nav_monitor/config/gui_lidar_off.config"   "$DST/config/gui_lidar_off.config"
+cp "$SRC/semantic_nav_monitor/launch/semantic_nav_monitor.launch.py"     "$DST/launch/semantic_nav_monitor.launch.py"
+cp "$SRC/semantic_nav_monitor/resource/semantic_nav_monitor"     "$DST/resource/semantic_nav_monitor"
+cp "$SRC/semantic_nav_monitor/semantic_nav_monitor/keyboard_hri_node.py"  "$DST/semantic_nav_monitor/keyboard_hri_node.py"
+cp "$SRC/semantic_nav_monitor/semantic_nav_monitor/mission_controller.py" "$DST/semantic_nav_monitor/mission_controller.py"
+cp "$SRC/semantic_nav_monitor/semantic_nav_monitor/monitor_node.py" "$DST/semantic_nav_monitor/monitor_node.py"
+cp "$SRC/semantic_nav_monitor/semantic_nav_monitor/path_visualizer_node.py"   "$DST/semantic_nav_monitor/path_visualizer_node.py"
+cp "$SRC/semantic_nav_monitor/worlds/warehouse_inspection.sdf"   "$DST/worlds/warehouse_inspection.sdf"
+cp "$SRC/semantic_nav_monitor/setup.py"        "$DST/setup.py"
+cp "$SRC/semantic_nav_monitor/setup.cfg"        "$DST/setup.cfg"
+cp "$SRC/semantic_nav_monitor/package.xml"        "$DST/package.xml"
 ______________________
 ## Clear the cache
 pkill -9 -f gz sim server

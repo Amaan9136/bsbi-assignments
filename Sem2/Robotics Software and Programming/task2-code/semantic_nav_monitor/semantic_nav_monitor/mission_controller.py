@@ -81,7 +81,14 @@ OBSTACLE_SAFETY_RANGE_M = 0.32
 SIDE_SECTOR_DEG = 150
 FORWARD_SECTOR_DEG = 30
 ROBOT_HALF_WIDTH_M = 0.11
-OBSTACLE_LATERAL_MARGIN_M = 0.09
+# How much extra clearance, beyond the robot's own half-width, is treated as
+# "the robot's footprint" when checking whether a corridor/gap is open. This
+# used to be 0.09m, which doubled the effective half-width to ~0.20m (i.e.
+# the robot refused to use any gap narrower than ~0.40m even though it is
+# only ~0.22m wide). Trimmed down to a small real safety pad so the robot
+# will actually thread gaps close to its own size instead of detouring
+# around them.
+OBSTACLE_LATERAL_MARGIN_M = 0.05
 LINEAR_SPEED_MPS = 0.30
 ANGULAR_GAIN = 1.8
 MAX_ANGULAR_SPEED_RADPS = 2.8
@@ -92,9 +99,25 @@ REVERSE_DISTANCE_M = 0.12
 REVERSE_SPEED_MPS = -0.27
 REVERSE_MAX_DURATION_S = 2.0
 ESCAPE_PROBE_ANGLES_DEG = [15, 25, 35, 45, 60, 75, 90, 110, 130, 150, 165]
-ESCAPE_MIN_CLEARANCE_M = ROBOT_HALF_WIDTH_M + OBSTACLE_LATERAL_MARGIN_M + 0.08
-ESCAPE_CLEARANCE_MARGIN_M = 0.15
+# Minimum forward "runway" (in metres) that must be clear along a candidate
+# escape heading before it is accepted. Previously this stacked THREE
+# separate safety pads on top of the robot's real half-width (+0.08m fixed,
+# then +0.15m more on the first attempt, decaying by only 0.05m per retry),
+# which meant the robot demanded ~0.43m of clear runway when it only
+# physically needs ~0.16-0.21m. That is what made it swing wide around
+# obstacles it could otherwise have driven directly between. Both pads are
+# now much smaller so the required clearance converges to just above the
+# robot's real half-width after at most one retry.
+ESCAPE_MIN_CLEARANCE_M = ROBOT_HALF_WIDTH_M + OBSTACLE_LATERAL_MARGIN_M + 0.05
+ESCAPE_CLEARANCE_MARGIN_M = 0.06
 ESCAPE_CLEARANCE_DECAY_PER_ATTEMPT_M = 0.05
+# When two candidate escape headings are roughly equally aligned with the
+# next waypoint, prefer whichever one actually has more open space, rather
+# than always taking the single angle that points marginally closer to the
+# goal. Picking the tightest-but-technically-legal gap every time is what
+# produced the "hugs the edge, stalls, retries, hugs the other edge"
+# oscillation that looked like random/erratic driving near the pallets.
+ESCAPE_SCORE_TOLERANCE_RAD = math.radians(12)
 ORIENT_YAW_TOLERANCE_RAD = 0.18
 ORIENT_MAX_DURATION_S = 6.0
 MIN_ORIENT_ANGULAR_SPEED_RADPS = 0.8
@@ -390,7 +413,10 @@ class MissionController(Node):
     def compute_escape_angle(self, direction_sign):
         """Find a clear heading, preferring whichever candidate (on either
         side) points closest to the next waypoint over the first one that
-        merely clears required_clearance."""
+        merely clears required_clearance. Among candidates that are roughly
+        equally well-aligned with the goal, prefer the one with more actual
+        open space so the robot doesn't repeatedly commit to the tightest
+        legal gap and stall/retry against it."""
         required_clearance = max(
             ESCAPE_MIN_CLEARANCE_M,
             ESCAPE_MIN_CLEARANCE_M
@@ -411,18 +437,26 @@ class MissionController(Node):
             candidates.append(math.radians(probe_deg))
             candidates.append(-math.radians(probe_deg))
 
-        best_angle = None
-        best_score = None
+        # Collect every candidate that clears the required runway, along
+        # with how well it's aligned with the goal and how much clearance
+        # it actually has.
+        viable = []
         for relative_angle in candidates:
             clearance = self.probe_heading_clearance(relative_angle)
             if clearance is not None and clearance < required_clearance:
                 continue
             score = abs(normalize_angle(relative_angle - goal_relative_angle))
-            if best_score is None or score < best_score:
-                best_score = score
-                best_angle = relative_angle
+            open_ended_clearance = clearance if clearance is not None else float("inf")
+            viable.append((relative_angle, score, open_ended_clearance))
 
-        if best_angle is not None:
+        if viable:
+            best_score = min(score for _, score, _ in viable)
+            near_best = [
+                c for c in viable if c[1] <= best_score + ESCAPE_SCORE_TOLERANCE_RAD
+            ]
+            # Among the goal-aligned candidates, take the one with the most
+            # breathing room rather than the bare-minimum-legal gap.
+            best_angle = max(near_best, key=lambda c: c[2])[0]
             return best_angle
 
         # Nothing cleared on either side - fall back to the widest turn on

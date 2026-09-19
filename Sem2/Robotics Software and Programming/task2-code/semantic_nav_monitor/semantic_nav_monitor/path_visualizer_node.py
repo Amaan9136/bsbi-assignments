@@ -104,6 +104,20 @@ class PathVisualizerNode(Node):
         self._publish_marker(proto_text, "clear")
 
     def _publish_marker(self, proto_text, action_label):
+        # BUG FIX: Gazebo's "/marker" service is a Gazebo Transport *oneway*
+        # service - the server (gz-sim's MarkerManager) is advertised with a
+        # callback that takes only a request and never sends a real reply
+        # (see gz-sim's MarkerManagerPrivate::OnMarkerMsg). Its response type
+        # is "gz.msgs.Empty", not "gz.msgs.Boolean". Requesting it with
+        # --reptype gz.msgs.Boolean asks the CLI to wait for a Boolean reply
+        # that the server never sends, so the call always "succeeds" with an
+        # empty/absent payload - which is exactly the
+        # "did not report success: ''" warning this used to print on every
+        # single draw/clear call, meaning the marker was silently never
+        # drawn. Using the correct "gz.msgs.Empty" reply type matches how
+        # the service is actually advertised, and we no longer look for the
+        # literal text "true" in stdout (an Empty reply has no such field) -
+        # a zero exit code is success.
         cmd = [
             "gz",
             "service",
@@ -112,7 +126,7 @@ class PathVisualizerNode(Node):
             "--reqtype",
             "gz.msgs.Marker",
             "--reptype",
-            "gz.msgs.Boolean",
+            "gz.msgs.Empty",
             "--timeout",
             "2000",
             "--req",
@@ -127,10 +141,9 @@ class PathVisualizerNode(Node):
                     f"'gz service -s /marker' ({action_label}) exited "
                     f"{result.returncode}: {result.stderr.strip() or result.stdout.strip()}"
                 )
-            elif "true" not in result.stdout.lower():
-                self.get_logger().warn(
-                    f"'gz service -s /marker' ({action_label}) did not report "
-                    f"success: {result.stdout.strip()!r}"
+            else:
+                self.get_logger().debug(
+                    f"'gz service -s /marker' ({action_label}) sent."
                 )
         except (subprocess.SubprocessError, FileNotFoundError) as exc:
             self.get_logger().warn(
