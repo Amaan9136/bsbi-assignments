@@ -18,6 +18,21 @@ actual cause of the robot not moving (type mismatch meant the
 authoritative bridge never received mission_controller's velocity
 commands). The optional camera sensor is enabled by switching
 TURTLEBOT3_MODEL to "burger_cam".
+
+NOTE (split server/GUI vs. combined process): by default this launches
+Gazebo as two separate processes - a headless server (`-s`) and a GUI
+client (`-g`) - which is the standard ros_gz_sim pattern. Some Gazebo GUI
+plugins that look up an entity's live pose to position themselves (the
+"Visualize Lidar" ray fan is one of these) rely on the GUI client staying
+continuously in sync with the server's ECM over the network transport, and
+can occasionally latch onto a stale/initial pose (typically wherever the
+robot spawned) if that sync hiccups - the lidar rays then look "stuck" at
+the spawn point even though the robot body itself keeps moving correctly
+and the mission logic is unaffected. If you see that, try the
+`combined_gz_process:=true` launch argument below, which runs the server
+and GUI as a single `gz sim` process instead (no split, no cross-process
+scene sync) - this is a legitimate, supported way to run Gazebo Sim and is
+worth trying specifically as a workaround for that plugin's pose lookups.
 """
 
 import os
@@ -25,6 +40,7 @@ import os
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, SetEnvironmentVariable
+from launch.conditions import IfCondition, UnlessCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration, PythonExpression
 from launch_ros.actions import Node
@@ -57,6 +73,16 @@ def generate_launch_description():
         default_value="true",
         description="Show the LIDAR scan (Visualize Lidar GUI plugin) in the Gazebo client.",
     )
+    combined_gz_process_arg = DeclareLaunchArgument(
+        "combined_gz_process",
+        default_value="false",
+        description=(
+            "Run Gazebo server+GUI as ONE 'gz sim' process instead of the "
+            "default split server(-s)/client(-g) processes. Try 'true' if "
+            "GUI-side visuals (e.g. the Visualize Lidar rays) appear stuck "
+            "at the robot's spawn pose instead of tracking it."
+        ),
+    )
 
     turtlebot3_model_env = SetEnvironmentVariable(
         name="TURTLEBOT3_MODEL",
@@ -69,6 +95,8 @@ def generate_launch_description():
         "' == 'true' else '", gui_config_lidar_off, "'",
     ])
 
+    # Default path: split server(-s)/client(-g) processes, the standard
+    # ros_gz_sim pattern.
     gz_sim_server_cmd = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             os.path.join(pkg_ros_gz_sim, "launch", "gz_sim.launch.py")
@@ -80,6 +108,7 @@ def generate_launch_description():
             ],
             "on_exit_shutdown": "true",
         }.items(),
+        condition=UnlessCondition(LaunchConfiguration("combined_gz_process")),
     )
 
     gz_sim_client_cmd = IncludeLaunchDescription(
@@ -89,6 +118,28 @@ def generate_launch_description():
         launch_arguments={
             "gz_args": ["-g -v2 --gui-config ", gui_config_path],
         }.items(),
+        condition=UnlessCondition(LaunchConfiguration("combined_gz_process")),
+    )
+
+    # Workaround path: one combined 'gz sim' process (server+GUI together).
+    # See the "combined_gz_process" argument/docstring note above for why
+    # you'd want this - it removes the cross-process GUI/server scene sync
+    # that some GUI plugins (e.g. Visualize Lidar) can occasionally lose
+    # track of.
+    gz_sim_combined_cmd = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            os.path.join(pkg_ros_gz_sim, "launch", "gz_sim.launch.py")
+        ),
+        launch_arguments={
+            "gz_args": [
+                "-r -v2 --gui-config ",
+                gui_config_path,
+                " ",
+                LaunchConfiguration("world"),
+            ],
+            "on_exit_shutdown": "true",
+        }.items(),
+        condition=IfCondition(LaunchConfiguration("combined_gz_process")),
     )
 
     robot_state_publisher_cmd = IncludeLaunchDescription(
@@ -139,9 +190,11 @@ def generate_launch_description():
         x_pose_arg,
         y_pose_arg,
         show_lidar_arg,
+        combined_gz_process_arg,
         turtlebot3_model_env,
         gz_sim_server_cmd,
         gz_sim_client_cmd,
+        gz_sim_combined_cmd,
         robot_state_publisher_cmd,
         spawn_turtlebot_cmd,
         mission_controller_node,
