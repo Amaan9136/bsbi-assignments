@@ -4,7 +4,9 @@ semantic_nav_monitor.launch.py
 
 Launches the custom "warehouse_inspection" Gazebo world bundled with this
 package, spawns a TurtleBot3 into it using turtlebot3_gazebo's launch files,
-and starts the mission_controller and monitor_node nodes.
+and starts the mission_controller, monitor_node and path_visualizer_node
+nodes (the last one draws/clears the planned-path line in the Gazebo Sim
+client when 'v' is pressed in keyboard_hri_node).
 
 USE CASE (Task 2): Warehouse Inspection Patrol Robot.
 
@@ -124,6 +126,14 @@ def generate_launch_description():
         parameters=[{"use_sim_time": True}],
     )
 
+    path_visualizer_node = Node(
+        package="semantic_nav_monitor",
+        executable="path_visualizer_node",
+        name="path_visualizer_node",
+        output="screen",
+        parameters=[{"use_sim_time": True}],
+    )
+
     return LaunchDescription([
         world_arg,
         x_pose_arg,
@@ -136,4 +146,5 @@ def generate_launch_description():
         spawn_turtlebot_cmd,
         mission_controller_node,
         monitor_node,
+        path_visualizer_node,
     ])

@@ -40,36 +40,50 @@ turtlebot3_gazebo's launch files subscribes to /cmd_vel as
 geometry_msgs/msg/TwistStamped (not plain Twist). We publish TwistStamped
 here so velocity commands actually reach Gazebo.
 
-NOTE (patrol speed/labels): LINEAR_SPEED_MPS is 0.22 m/s and
-REPLAN_LINEAR_SPEED_MPS is also 0.22 m/s - both at the TurtleBot3
-Burger's actual top linear speed, so cruise speed cannot go any higher
-without exceeding what the real hardware (and likely the diff-drive
-plugin) supports. Rotation still had headroom below the Burger's 2.84
-rad/s hardware limit, so MAX_ANGULAR_SPEED_RADPS (2.6 rad/s) and
-ANGULAR_GAIN (1.8, how aggressively heading error converts to turn rate)
-were both raised, along with MIN_ORIENT_ANGULAR_SPEED_RADPS (0.8 rad/s,
-the floor speed used while ORIENT is turning to a new heading) and
-REVERSE_SPEED_MPS (-0.20 m/s, still under 0.22 m/s) so every phase of
-motion - cruising, turning, reversing, and the REPLAN commit drive - now
-runs as fast as the hardware realistically allows. Each waypoint also now
-has a human-readable CHECKPOINT_LABELS entry so mission_controller's log
-output reads as a named checkpoint tour ("Checkpoint 2 - North-East
-Corner") rather than bare coordinates.
+NOTE (patrol speed, deliberately above the real Burger's 0.22 m/s spec):
+LINEAR_SPEED_MPS and REPLAN_LINEAR_SPEED_MPS are 0.30 m/s and
+REVERSE_SPEED_MPS is -0.27 m/s - all above the real TurtleBot3 Burger's
+hardware limit, on request, since this is a simulation and the patrol
+felt too slow at the real-hardware-accurate speed. MAX_ANGULAR_SPEED_RADPS
+is 2.8 rad/s, just under the Burger's 2.84 rad/s limit. To keep this safe
+at the higher speed, OBSTACLE_SAFETY_RANGE_M and REVERSE_TRIGGER_RANGE_M
+were both raised slightly (0.40->0.45m and 0.25->0.28m) so the extra
+distance covered during the CONSECUTIVE_DETECTIONS_REQUIRED reaction
+window is still absorbed before the robot gets uncomfortably close. The
+Gazebo world's physics block was also given a 1.5x real_time_factor
+(see worlds/warehouse_inspection.sdf) so the whole simulation clock runs
+50% faster. Each waypoint also has a human-readable CHECKPOINT_LABELS
+entry so mission_controller's log output reads as a named checkpoint tour
+("Checkpoint 2 - North-East Corner") rather than bare coordinates.
 
 NOTE (tighter avoidance corridor): compute_escape_angle() picks the
 smallest ESCAPE_PROBE_ANGLES_DEG turn that clears a required_clearance
-distance. That required distance used to start at OBSTACLE_SAFETY_RANGE_M
-(0.45m) + ESCAPE_CLEARANCE_MARGIN_M (0.35m) = 0.80m on the first avoidance
-attempt, which only a wide ~145-160 degree turn could satisfy next to a
-pallet stack, producing a large detour loop instead of a tight sidestep.
-OBSTACLE_SAFETY_RANGE_M/REVERSE_TRIGGER_RANGE_M/OBSTACLE_LATERAL_MARGIN_M
-are now smaller (still comfortably outside the robot's real
-ROBOT_HALF_WIDTH_M) and ESCAPE_CLEARANCE_MARGIN_M is 0.15m, so the first
-attempt only needs ~0.55m of clearance - satisfied by a 45-65 degree turn
-for the pallet spacing in this world - and REPLAN_DISTANCE_M (how far it
-commits along that heading before handing back to NAVIGATE) is shorter
-too, so the robot sidesteps close to its own footprint and rejoins the
-direct waypoint line quickly instead of swinging wide around obstacles.
+distance. That required distance used to always float above
+OBSTACLE_SAFETY_RANGE_M (0.45m) no matter how many attempts were made,
+so only a wide ~105-160 degree turn could ever satisfy it next to a
+pallet stack, producing a large detour loop instead of a tight sidestep -
+even though the robot's real footprint only needs
+ESCAPE_MIN_CLEARANCE_M = ROBOT_HALF_WIDTH_M + OBSTACLE_LATERAL_MARGIN_M +
+0.03 = ~0.23m to physically fit past something. required_clearance now
+decays from ESCAPE_MIN_CLEARANCE_M + ESCAPE_CLEARANCE_MARGIN_M down to
+that same ~0.23m floor over a few attempts, so the first attempt is
+satisfied by a much smaller 45-65 degree turn for the pallet spacing in
+this world, and the robot sidesteps close to its own footprint instead of
+swinging wide around obstacles.
+
+NOTE (no more forward+turn "wedging"): run_navigate() and
+run_avoid_commit() used to command full linear speed at the same time as
+a large corrective turn, so right after REPLAN handed back to NAVIGATE
+with a big heading error (e.g. the goal is behind the escape heading),
+the robot drove forward and rotated hard simultaneously instead of
+turning to face the goal first - which, wedged next to a pallet stack,
+looked like the wheels spinning in place (see the "STALL DETECTED...
+moved only 0.025m" log) and re-triggered avoidance immediately, producing
+an oscillating NAVIGATE <-> AVOID_OBSTACLE <-> REPLAN loop that never made
+net progress. Both methods now scale linear_x down by
+max(0, cos(heading_error)) and drop it to zero past
+HEADING_ALIGN_SLOWDOWN_RAD (35 degrees), so the robot rotates in place to
+face roughly the right way before it commits to driving forward again.
 
 NOTE (planning step): pressing 's' now moves IDLE -> PLANNING -> NAVIGATE
 instead of straight to NAVIGATE. PLANNING builds the full checkpoint route
@@ -80,9 +94,13 @@ route is fixed and known in advance (this is a checkpoint patrol, not a
 search problem), so there is nothing to wait on. AVOID_OBSTACLE/REPLAN are
 unchanged and still handle any live obstacle the planned straight-line legs
 run into; PLANNING only covers the checkpoint order, not obstacle-aware
-routing. To see the planned route as a drawn line, echo /planned_path or
-add RViz2's Path display subscribed to it - the Gazebo Sim client window
-used elsewhere in this project does not have a built-in path-line display.
+routing. To see the planned route as a drawn line in the Gazebo Sim client
+itself (it has no built-in path-line display), press 'v' in the
+keyboard_hri_node terminal: it publishes a std_msgs/Bool on
+/show_planned_path, and the new path_visualizer_node.py subscribes to that
+plus the already-latched /planned_path and draws/clears a LINE_STRIP
+marker over the checkpoint route via the `gz topic -t /marker` service -
+purely a visualisation toggle, the plan itself never changes.
 """
 
 import math
@@ -121,37 +139,40 @@ CHECKPOINT_LABELS = [
     "Checkpoint 0 - Charging Dock",
 ]
 WAYPOINT_TOLERANCE_M = 0.15
-OBSTACLE_SAFETY_RANGE_M = 0.40
+OBSTACLE_SAFETY_RANGE_M = 0.45
 SIDE_SECTOR_DEG = 150
 FORWARD_SECTOR_DEG = 30
 ROBOT_HALF_WIDTH_M = 0.11
 OBSTACLE_LATERAL_MARGIN_M = 0.09
-LINEAR_SPEED_MPS = 0.22
+LINEAR_SPEED_MPS = 0.30
 ANGULAR_GAIN = 1.8
-MAX_ANGULAR_SPEED_RADPS = 2.6
+MAX_ANGULAR_SPEED_RADPS = 2.8
 CONTROL_PERIOD_S = 0.1
 CONSECUTIVE_DETECTIONS_REQUIRED = 3
-REVERSE_TRIGGER_RANGE_M = 0.25
+REVERSE_TRIGGER_RANGE_M = 0.28
 REVERSE_DISTANCE_M = 0.12
-REVERSE_SPEED_MPS = -0.20
+REVERSE_SPEED_MPS = -0.27
 REVERSE_MAX_DURATION_S = 2.0
 ESCAPE_PROBE_ANGLES_DEG = [45, 65, 85, 105, 125, 145, 160]
 ESCAPE_PROBE_HALFWIDTH_DEG = 10
+ESCAPE_MIN_CLEARANCE_M = ROBOT_HALF_WIDTH_M + OBSTACLE_LATERAL_MARGIN_M + 0.03
 ESCAPE_CLEARANCE_MARGIN_M = 0.15
+ESCAPE_CLEARANCE_DECAY_PER_ATTEMPT_M = 0.05
 ORIENT_YAW_TOLERANCE_RAD = 0.18
 ORIENT_MAX_DURATION_S = 6.0
 MIN_ORIENT_ANGULAR_SPEED_RADPS = 0.8
 ORIENT_DIRECTION_FLIP_AFTER = 2
 ORIENT_STALL_CHECK_S = 1.5
 ORIENT_STALL_YAW_DELTA_RAD = 0.05
-REPLAN_LINEAR_SPEED_MPS = 0.22
-REPLAN_DISTANCE_M = 0.35
+REPLAN_LINEAR_SPEED_MPS = 0.30
+REPLAN_DISTANCE_M = 0.45
 REPLAN_MAX_DURATION_S = 6.0
 MAX_AVOID_ATTEMPTS = 10
 DIAGNOSTIC_THROTTLE_S = 3.0
 STALL_CHECK_DURATION_S = 1.0
 STALL_DISTANCE_THRESHOLD_M = 0.05
 SCAN_TIMEOUT_WARN_S = 3.0
+HEADING_ALIGN_SLOWDOWN_RAD = math.radians(35)
 
 
 def yaw_from_quaternion(q):
@@ -422,8 +443,10 @@ class MissionController(Node):
 
     def compute_escape_angle(self, direction_sign):
         required_clearance = max(
-            OBSTACLE_SAFETY_RANGE_M,
-            OBSTACLE_SAFETY_RANGE_M + ESCAPE_CLEARANCE_MARGIN_M - 0.05 * self.avoid_attempts,
+            ESCAPE_MIN_CLEARANCE_M,
+            ESCAPE_MIN_CLEARANCE_M
+            + ESCAPE_CLEARANCE_MARGIN_M
+            - ESCAPE_CLEARANCE_DECAY_PER_ATTEMPT_M * self.avoid_attempts,
         )
         for probe_deg in ESCAPE_PROBE_ANGLES_DEG:
             relative_angle = math.radians(probe_deg) * direction_sign
@@ -631,8 +654,11 @@ class MissionController(Node):
             -MAX_ANGULAR_SPEED_RADPS,
             min(MAX_ANGULAR_SPEED_RADPS, ANGULAR_GAIN * heading_error),
         )
+        linear_x = 0.0
+        if abs(heading_error) < HEADING_ALIGN_SLOWDOWN_RAD:
+            linear_x = REPLAN_LINEAR_SPEED_MPS * max(0.0, math.cos(heading_error))
         self.cmd_vel_pub.publish(
-            self._make_stamped_twist(linear_x=REPLAN_LINEAR_SPEED_MPS, angular_z=angular_z)
+            self._make_stamped_twist(linear_x=linear_x, angular_z=angular_z)
         )
         self.avoid_phase_ticks += 1
 
@@ -650,7 +676,7 @@ class MissionController(Node):
             self.stall_origin_time = None
             self.transition_to(MissionState.NAVIGATE)
 
-    def is_stalled(self, x, y):
+    def is_stalled(self, x, y, translating):
         """Odometry-based fallback obstacle detector, independent of LIDAR.
 
         If we've been commanding forward motion for STALL_CHECK_DURATION_S
@@ -659,9 +685,16 @@ class MissionController(Node):
         working, correctly configured, or detecting it. This guarantees the
         robot can never indefinitely push against an obstacle even if the
         LIDAR-based detection path is broken for some environment-specific
-        reason.
+        reason. `translating` must be False while the heading-align
+        slowdown has linear_x pinned to ~0 (a deliberate in-place turn), or
+        a legitimate rotate-to-face-goal phase would be misread as a stall.
         """
         now = time.monotonic()
+        if not translating:
+            self.stall_origin = (x, y)
+            self.stall_origin_time = now
+            return False
+
         if self.stall_origin is None:
             self.stall_origin = (x, y)
             self.stall_origin_time = now
@@ -716,20 +749,24 @@ class MissionController(Node):
                 )
             return
 
-        if self.is_stalled(x, y):
+        target_heading = math.atan2(dy, dx)
+        heading_error = normalize_angle(target_heading - yaw)
+        translating = abs(heading_error) < HEADING_ALIGN_SLOWDOWN_RAD
+
+        if self.is_stalled(x, y, translating):
             self.start_avoidance_attempt(first=True)
             self.step_avoid_obstacle(False)
             return
-
-        target_heading = math.atan2(dy, dx)
-        heading_error = normalize_angle(target_heading - yaw)
 
         angular_z = max(
             -MAX_ANGULAR_SPEED_RADPS,
             min(MAX_ANGULAR_SPEED_RADPS, ANGULAR_GAIN * heading_error),
         )
+        linear_x = 0.0
+        if translating:
+            linear_x = LINEAR_SPEED_MPS * max(0.0, math.cos(heading_error))
         self.cmd_vel_pub.publish(
-            self._make_stamped_twist(linear_x=LINEAR_SPEED_MPS, angular_z=angular_z)
+            self._make_stamped_twist(linear_x=linear_x, angular_z=angular_z)
         )
 
         if self.state != MissionState.NAVIGATE:

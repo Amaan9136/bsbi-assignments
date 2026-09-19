@@ -34,6 +34,7 @@ setup(
             "mission_controller = semantic_nav_monitor.mission_controller:main",
             "monitor_node = semantic_nav_monitor.monitor_node:main",
             "keyboard_hri_node = semantic_nav_monitor.keyboard_hri_node:main",
+            "path_visualizer_node = semantic_nav_monitor.path_visualizer_node:main",
         ],
     },
 )

@@ -4,6 +4,7 @@ DST="$HOME/ros2_ws/src/semantic_nav_monitor"
 
 cp "$SRC/semantic_nav_monitor/semantic_nav_monitor/mission_controller.py" "$DST/semantic_nav_monitor/mission_controller.py"
 cp "$SRC/semantic_nav_monitor/semantic_nav_monitor/keyboard_hri_node.py"  "$DST/semantic_nav_monitor/keyboard_hri_node.py"
+cp "$SRC/semantic_nav_monitor/semantic_nav_monitor/path_visualizer_node.py"   "$DST/semantic_nav_monitor/path_visualizer_node.py"
 cp "$SRC/semantic_nav_monitor/launch/semantic_nav_monitor.launch.py"     "$DST/launch/semantic_nav_monitor.launch.py"
 cp "$SRC/semantic_nav_monitor/setup.py"                                   "$DST/setup.py"
 cp "$SRC/semantic_nav_monitor/worlds/warehouse_inspection.sdf"   "$DST/worlds/warehouse_inspection.sdf"
@@ -78,6 +79,7 @@ ros2 node list
 ros2 run semantic_nav_monitor keyboard_hri_node
 ros2 run semantic_nav_monitor monitor_node
 ros2 run semantic_nav_monitor mission_controller
+ros2 run semantic_nav_monitor path_visualizer_node
 ros2 run semantic_nav_monitor robot_state_publisher
 ros2 run semantic_nav_monitor ros_gz_bridge
 ______________________

@@ -12,6 +12,10 @@ Keys:
     s  -> start the mission
     p  -> pause the mission (robot stops in place, state machine holds)
     x  -> stop the mission (robot stops, transitions to MISSION_COMPLETE)
+    v  -> toggle the planned-path line on/off in the Gazebo Sim client
+          (publishes std_msgs/Bool on /show_planned_path; the plan itself,
+          published once by mission_controller on /planned_path, never
+          changes - this only shows/hides the drawn line)
     q  -> quit this HRI node (does not stop the mission)
 
 Run this in its own terminal, alongside semantic_nav_monitor.launch.py.
@@ -24,7 +28,7 @@ import tty
 
 import rclpy
 from rclpy.node import Node
-from std_msgs.msg import String
+from std_msgs.msg import Bool, String
 
 KEY_TO_COMMAND = {
     "s": "start",
@@ -48,9 +52,12 @@ class KeyboardHRINode(Node):
     def __init__(self):
         super().__init__("keyboard_hri_node")
         self.hri_pub = self.create_publisher(String, "/hri_command", 10)
+        self.show_path_pub = self.create_publisher(Bool, "/show_planned_path", 10)
+        self.path_visible = False
         self._wait_for_subscriber(timeout_sec=5.0)
         self.get_logger().info(
-            "keyboard_hri_node ready. Press 's' start / 'p' pause / 'x' stop / 'q' quit."
+            "keyboard_hri_node ready. Press 's' start / 'p' pause / 'x' stop / "
+            "'v' toggle planned-path line / 'q' quit."
         )
 
     def _wait_for_subscriber(self, timeout_sec):
@@ -71,6 +78,14 @@ class KeyboardHRINode(Node):
         self.hri_pub.publish(msg)
         self.get_logger().info(f"Published HRI command: '{command}'")
 
+    def toggle_path_visibility(self):
+        self.path_visible = not self.path_visible
+        msg = Bool()
+        msg.data = self.path_visible
+        self.show_path_pub.publish(msg)
+        state = "ON" if self.path_visible else "OFF"
+        self.get_logger().info(f"Planned-path line: {state}")
+
 
 def main(args=None):
     rclpy.init(args=args)
@@ -81,6 +96,10 @@ def main(args=None):
             if key == "q":
                 node.get_logger().info("Quitting keyboard_hri_node.")
                 break
+            if key == "v":
+                node.toggle_path_visibility()
+                rclpy.spin_once(node, timeout_sec=0.0)
+                continue
             command = KEY_TO_COMMAND.get(key)
             if command is not None:
                 node.publish_command(command)
