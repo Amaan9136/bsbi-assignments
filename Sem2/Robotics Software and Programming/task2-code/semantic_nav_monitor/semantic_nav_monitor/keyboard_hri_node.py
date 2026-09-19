@@ -13,9 +13,8 @@ Keys:
     p  -> pause the mission (robot stops in place, state machine holds)
     x  -> stop the mission (robot stops, transitions to MISSION_COMPLETE)
     v  -> toggle the planned-path line on/off in the Gazebo Sim client
-          (publishes std_msgs/Bool on /show_planned_path; the plan itself,
-          published once by mission_controller on /planned_path, never
-          changes - this only shows/hides the drawn line)
+          (publishes std_msgs/Bool on /show_planned_path; the plan itself
+          never changes - this only shows/hides the drawn line)
     q  -> quit this HRI node (does not stop the mission)
 
 Run this in its own terminal, alongside semantic_nav_monitor.launch.py.

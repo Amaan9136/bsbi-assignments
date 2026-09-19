@@ -5,9 +5,9 @@ mission_controller.py
 Goal-oriented mission controller for a TurtleBot3 robot.
 
 TASK 2 USE CASE: "Warehouse Inspection Patrol Robot"
-The robot's mission is to patrol four inspection checkpoints laid out in the
-custom warehouse_inspection.sdf (see the worlds/ folder), reporting its
-own behaviour throughout. Eight pallet stacks (two per patrol leg) plus three
+The robot patrols four inspection checkpoints laid out in the custom
+warehouse_inspection.sdf (see the worlds/ folder), reporting its own
+behaviour throughout. Eight pallet stacks (two per patrol leg) plus three
 small centerline obstacles sit near the route so a real run exercises every
 state repeatedly, not just NAVIGATE.
 
@@ -18,89 +18,27 @@ publishes state transitions on /mission_state, publishes the pre-computed
 checkpoint route on /planned_path, and accepts simple human-robot-interaction
 commands on /hri_command ("start", "pause", "stop").
 
-AVOID_OBSTACLE / REPLAN previously turned in place until a clear reading came
-back, then handed straight back to NAVIGATE facing the original goal - which
-often meant driving straight back into the same obstacle and oscillating in
-front of it. The two states now split the work differently:
-  - AVOID_OBSTACLE: backs off only as far as needed (REVERSE), then rotates
-    to a heading it has actively confirmed is clear by probing the scan at
-    several candidate angles - weighting nearby walls exactly like obstacles,
-    since a wall shows up as a short range reading in the same sectors
-    (ORIENT). This is what lets it steer away from a wall in a corner
-    instead of into it.
-  - REPLAN: once a clear heading is confirmed, the robot drives forward
-    along that heading for a committed distance (not just a moment) before
-    handing back to NAVIGATE, so the waypoint-seeking controller only
-    resumes once the robot has actually cleared the obstacle. If a new
-    obstacle appears while REPLAN is committing, control goes back to
-    AVOID_OBSTACLE to pick a fresh heading rather than stalling in place.
+AVOID_OBSTACLE backs off only as far as needed (REVERSE), then rotates to a
+heading it has actively confirmed is clear by probing the scan at several
+candidate angles (ORIENT). REPLAN then drives forward along that heading for
+a committed distance before handing back to NAVIGATE, so the waypoint-seeking
+controller only resumes once the robot has actually cleared the obstacle. If
+a new obstacle appears while REPLAN is committing, control goes back to
+AVOID_OBSTACLE to pick a fresh heading.
 
-NOTE (Jazzy/TB3 port): the authoritative ros_gz_bridge started by
-turtlebot3_gazebo's launch files subscribes to /cmd_vel as
-geometry_msgs/msg/TwistStamped (not plain Twist). We publish TwistStamped
-here so velocity commands actually reach Gazebo.
+The authoritative ros_gz_bridge started by turtlebot3_gazebo's launch files
+subscribes to /cmd_vel as geometry_msgs/msg/TwistStamped (not plain Twist),
+so velocity commands are published as TwistStamped here.
 
-NOTE (patrol speed, deliberately above the real Burger's 0.22 m/s spec):
-LINEAR_SPEED_MPS and REPLAN_LINEAR_SPEED_MPS are 0.30 m/s and
-REVERSE_SPEED_MPS is -0.27 m/s - all above the real TurtleBot3 Burger's
-hardware limit, on request, since this is a simulation and the patrol
-felt too slow at the real-hardware-accurate speed. MAX_ANGULAR_SPEED_RADPS
-is 2.8 rad/s, just under the Burger's 2.84 rad/s limit. To keep this safe
-at the higher speed, OBSTACLE_SAFETY_RANGE_M and REVERSE_TRIGGER_RANGE_M
-were both raised slightly (0.40->0.45m and 0.25->0.28m) so the extra
-distance covered during the CONSECUTIVE_DETECTIONS_REQUIRED reaction
-window is still absorbed before the robot gets uncomfortably close. The
-Gazebo world's physics block was also given a 1.5x real_time_factor
-(see worlds/warehouse_inspection.sdf) so the whole simulation clock runs
-50% faster. Each waypoint also has a human-readable CHECKPOINT_LABELS
-entry so mission_controller's log output reads as a named checkpoint tour
-("Checkpoint 2 - North-East Corner") rather than bare coordinates.
-
-NOTE (tighter avoidance corridor): compute_escape_angle() picks the
-smallest ESCAPE_PROBE_ANGLES_DEG turn that clears a required_clearance
-distance. That required distance used to always float above
-OBSTACLE_SAFETY_RANGE_M (0.45m) no matter how many attempts were made,
-so only a wide ~105-160 degree turn could ever satisfy it next to a
-pallet stack, producing a large detour loop instead of a tight sidestep -
-even though the robot's real footprint only needs
-ESCAPE_MIN_CLEARANCE_M = ROBOT_HALF_WIDTH_M + OBSTACLE_LATERAL_MARGIN_M +
-0.03 = ~0.23m to physically fit past something. required_clearance now
-decays from ESCAPE_MIN_CLEARANCE_M + ESCAPE_CLEARANCE_MARGIN_M down to
-that same ~0.23m floor over a few attempts, so the first attempt is
-satisfied by a much smaller 45-65 degree turn for the pallet spacing in
-this world, and the robot sidesteps close to its own footprint instead of
-swinging wide around obstacles.
-
-NOTE (no more forward+turn "wedging"): run_navigate() and
-run_avoid_commit() used to command full linear speed at the same time as
-a large corrective turn, so right after REPLAN handed back to NAVIGATE
-with a big heading error (e.g. the goal is behind the escape heading),
-the robot drove forward and rotated hard simultaneously instead of
-turning to face the goal first - which, wedged next to a pallet stack,
-looked like the wheels spinning in place (see the "STALL DETECTED...
-moved only 0.025m" log) and re-triggered avoidance immediately, producing
-an oscillating NAVIGATE <-> AVOID_OBSTACLE <-> REPLAN loop that never made
-net progress. Both methods now scale linear_x down by
-max(0, cos(heading_error)) and drop it to zero past
-HEADING_ALIGN_SLOWDOWN_RAD (35 degrees), so the robot rotates in place to
-face roughly the right way before it commits to driving forward again.
-
-NOTE (planning step): pressing 's' now moves IDLE -> PLANNING -> NAVIGATE
-instead of straight to NAVIGATE. PLANNING builds the full checkpoint route
-(current pose, then every entry in WAYPOINTS) as a nav_msgs/Path, publishes
-it once on /planned_path (TRANSIENT_LOCAL QoS, so a late subscriber such as
-RViz2 still receives it), then hands off to NAVIGATE immediately - the
-route is fixed and known in advance (this is a checkpoint patrol, not a
-search problem), so there is nothing to wait on. AVOID_OBSTACLE/REPLAN are
-unchanged and still handle any live obstacle the planned straight-line legs
-run into; PLANNING only covers the checkpoint order, not obstacle-aware
-routing. To see the planned route as a drawn line in the Gazebo Sim client
-itself (it has no built-in path-line display), press 'v' in the
-keyboard_hri_node terminal: it publishes a std_msgs/Bool on
-/show_planned_path, and the new path_visualizer_node.py subscribes to that
-plus the already-latched /planned_path and draws/clears a LINE_STRIP
-marker over the checkpoint route via the `gz topic -t /marker` service -
-purely a visualisation toggle, the plan itself never changes.
+Pressing 's' moves IDLE -> PLANNING -> NAVIGATE. PLANNING builds the full
+checkpoint route (current pose, then every entry in WAYPOINTS) as a
+nav_msgs/Path and publishes it once on /planned_path (TRANSIENT_LOCAL QoS),
+then hands off to NAVIGATE immediately - the route is fixed and known in
+advance, so there is nothing to wait on. To see the planned route drawn in
+the Gazebo Sim client, press 'v' in the keyboard_hri_node terminal: it
+toggles /show_planned_path, which path_visualizer_node.py uses to draw or
+clear a LINE_STRIP marker over the route via the Gazebo marker service.
+This is purely a visualisation toggle; the plan itself never changes.
 """
 
 import math
@@ -139,7 +77,7 @@ CHECKPOINT_LABELS = [
     "Checkpoint 0 - Charging Dock",
 ]
 WAYPOINT_TOLERANCE_M = 0.15
-OBSTACLE_SAFETY_RANGE_M = 0.45
+OBSTACLE_SAFETY_RANGE_M = 0.32
 SIDE_SECTOR_DEG = 150
 FORWARD_SECTOR_DEG = 30
 ROBOT_HALF_WIDTH_M = 0.11
@@ -149,13 +87,12 @@ ANGULAR_GAIN = 1.8
 MAX_ANGULAR_SPEED_RADPS = 2.8
 CONTROL_PERIOD_S = 0.1
 CONSECUTIVE_DETECTIONS_REQUIRED = 3
-REVERSE_TRIGGER_RANGE_M = 0.28
+REVERSE_TRIGGER_RANGE_M = 0.20
 REVERSE_DISTANCE_M = 0.12
 REVERSE_SPEED_MPS = -0.27
 REVERSE_MAX_DURATION_S = 2.0
-ESCAPE_PROBE_ANGLES_DEG = [45, 65, 85, 105, 125, 145, 160]
-ESCAPE_PROBE_HALFWIDTH_DEG = 10
-ESCAPE_MIN_CLEARANCE_M = ROBOT_HALF_WIDTH_M + OBSTACLE_LATERAL_MARGIN_M + 0.03
+ESCAPE_PROBE_ANGLES_DEG = [15, 25, 35, 45, 60, 75, 90, 110, 130, 150, 165]
+ESCAPE_MIN_CLEARANCE_M = ROBOT_HALF_WIDTH_M + OBSTACLE_LATERAL_MARGIN_M + 0.08
 ESCAPE_CLEARANCE_MARGIN_M = 0.15
 ESCAPE_CLEARANCE_DECAY_PER_ATTEMPT_M = 0.05
 ORIENT_YAW_TOLERANCE_RAD = 0.18
@@ -420,6 +357,8 @@ class MissionController(Node):
         return left, right
 
     def probe_heading_clearance(self, relative_angle_rad):
+        """Distance the robot could travel along relative_angle_rad before
+        its own body-width corridor (not just a thin ray) hits something."""
         if self.latest_scan is None:
             return None
 
@@ -427,32 +366,68 @@ class MissionController(Node):
         if len(scan.ranges) == 0:
             return None
 
-        halfwidth = math.radians(ESCAPE_PROBE_HALFWIDTH_DEG)
-        min_range = float("inf")
+        corridor_half_width = ROBOT_HALF_WIDTH_M + OBSTACLE_LATERAL_MARGIN_M
+        min_forward = float("inf")
         found = False
 
         for i, r in enumerate(scan.ranges):
             if not (0.0 < r <= scan.range_max):
                 continue
             angle = normalize_angle(scan.angle_min + i * scan.angle_increment)
-            if abs(normalize_angle(angle - relative_angle_rad)) <= halfwidth:
+            local_angle = normalize_angle(angle - relative_angle_rad)
+            if abs(local_angle) >= math.pi / 2.0:
+                continue
+            forward = r * math.cos(local_angle)
+            lateral = r * math.sin(local_angle)
+            if forward <= 0.0:
+                continue
+            if abs(lateral) <= corridor_half_width:
                 found = True
-                min_range = min(min_range, r)
+                min_forward = min(min_forward, forward)
 
-        return min_range if found else None
+        return min_forward if found else None
 
     def compute_escape_angle(self, direction_sign):
+        """Find a clear heading, preferring whichever candidate (on either
+        side) points closest to the next waypoint over the first one that
+        merely clears required_clearance."""
         required_clearance = max(
             ESCAPE_MIN_CLEARANCE_M,
             ESCAPE_MIN_CLEARANCE_M
             + ESCAPE_CLEARANCE_MARGIN_M
             - ESCAPE_CLEARANCE_DECAY_PER_ATTEMPT_M * self.avoid_attempts,
         )
+
+        goal_relative_angle = 0.0
+        if self.current_pose is not None and self.waypoint_index < len(WAYPOINTS):
+            x, y, yaw = self.current_pose
+            goal_x, goal_y = WAYPOINTS[self.waypoint_index]
+            goal_relative_angle = normalize_angle(
+                math.atan2(goal_y - y, goal_x - x) - yaw
+            )
+
+        candidates = []
         for probe_deg in ESCAPE_PROBE_ANGLES_DEG:
-            relative_angle = math.radians(probe_deg) * direction_sign
+            candidates.append(math.radians(probe_deg))
+            candidates.append(-math.radians(probe_deg))
+
+        best_angle = None
+        best_score = None
+        for relative_angle in candidates:
             clearance = self.probe_heading_clearance(relative_angle)
-            if clearance is None or clearance >= required_clearance:
-                return relative_angle
+            if clearance is not None and clearance < required_clearance:
+                continue
+            score = abs(normalize_angle(relative_angle - goal_relative_angle))
+            if best_score is None or score < best_score:
+                best_score = score
+                best_angle = relative_angle
+
+        if best_angle is not None:
+            return best_angle
+
+        # Nothing cleared on either side - fall back to the widest turn on
+        # the side side_clearance() judged more open, so the robot still
+        # picks something rather than freezing in place.
         return math.radians(ESCAPE_PROBE_ANGLES_DEG[-1]) * direction_sign
 
     def control_loop(self):
@@ -677,18 +652,11 @@ class MissionController(Node):
             self.transition_to(MissionState.NAVIGATE)
 
     def is_stalled(self, x, y, translating):
-        """Odometry-based fallback obstacle detector, independent of LIDAR.
-
-        If we've been commanding forward motion for STALL_CHECK_DURATION_S
-        seconds but the robot's actual position has barely changed, it is
-        physically blocked by something - regardless of whether /scan is
-        working, correctly configured, or detecting it. This guarantees the
-        robot can never indefinitely push against an obstacle even if the
-        LIDAR-based detection path is broken for some environment-specific
-        reason. `translating` must be False while the heading-align
-        slowdown has linear_x pinned to ~0 (a deliberate in-place turn), or
-        a legitimate rotate-to-face-goal phase would be misread as a stall.
-        """
+        """Odometry-based fallback obstacle detector, independent of LIDAR:
+        if forward motion has been commanded for STALL_CHECK_DURATION_S but
+        the robot barely moved, treat it as physically blocked. `translating`
+        must be False during a deliberate in-place turn, or that would be
+        misread as a stall."""
         now = time.monotonic()
         if not translating:
             self.stall_origin = (x, y)

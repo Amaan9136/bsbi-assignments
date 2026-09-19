@@ -4,16 +4,16 @@ path_visualizer_node.py
 
 Draws the mission_controller's planned checkpoint route as a visible line in
 the Gazebo Sim client window. Gazebo Sim has no built-in "Path" GUI plugin,
-so this uses its Marker service instead: a LINE_STRIP gz.msgs.Marker sent to
-the /marker topic with `gz topic`, which is how markers are added/removed in
-Gazebo Sim regardless of ROS.
+so this uses its Marker service instead: a LINE_STRIP gz.msgs.Marker sent
+via `gz service -s /marker`, the Gazebo Sim interface for adding/removing
+markers.
 
 Subscribes to /planned_path (TRANSIENT_LOCAL, matching mission_controller's
 latched publisher) to learn the route once, and to /show_planned_path
 (std_msgs/Bool, toggled by pressing 'v' in keyboard_hri_node) to know
 whether the line should currently be visible. Toggling this only adds or
-removes the marker - it never touches /planned_path, /hri_command, or any
-part of mission_controller's actual behaviour.
+removes the marker - it never touches /planned_path or mission_controller's
+actual behaviour.
 """
 
 import subprocess
@@ -29,7 +29,7 @@ MARKER_NAMESPACE = "semantic_nav_monitor"
 MARKER_ID = 1
 MARKER_Z_M = 0.05
 MARKER_LINE_WIDTH_M = 0.05
-GZ_TOPIC_TIMEOUT_S = 2.0
+GZ_TOPIC_TIMEOUT_S = 3.0
 
 
 class PathVisualizerNode(Node):
@@ -104,16 +104,37 @@ class PathVisualizerNode(Node):
         self._publish_marker(proto_text, "clear")
 
     def _publish_marker(self, proto_text, action_label):
+        cmd = [
+            "gz",
+            "service",
+            "-s",
+            "/marker",
+            "--reqtype",
+            "gz.msgs.Marker",
+            "--reptype",
+            "gz.msgs.Boolean",
+            "--timeout",
+            "2000",
+            "--req",
+            proto_text,
+        ]
         try:
-            subprocess.run(
-                ["gz", "topic", "-t", "/marker", "-m", "gz.msgs.Marker", "-p", proto_text],
-                timeout=GZ_TOPIC_TIMEOUT_S,
-                check=True,
-                capture_output=True,
+            result = subprocess.run(
+                cmd, timeout=GZ_TOPIC_TIMEOUT_S, capture_output=True, text=True
             )
+            if result.returncode != 0:
+                self.get_logger().warn(
+                    f"'gz service -s /marker' ({action_label}) exited "
+                    f"{result.returncode}: {result.stderr.strip() or result.stdout.strip()}"
+                )
+            elif "true" not in result.stdout.lower():
+                self.get_logger().warn(
+                    f"'gz service -s /marker' ({action_label}) did not report "
+                    f"success: {result.stdout.strip()!r}"
+                )
         except (subprocess.SubprocessError, FileNotFoundError) as exc:
             self.get_logger().warn(
-                f"Could not {action_label} planned-path marker via 'gz topic': {exc}"
+                f"Could not {action_label} planned-path marker via 'gz service': {exc}"
             )
 
 
