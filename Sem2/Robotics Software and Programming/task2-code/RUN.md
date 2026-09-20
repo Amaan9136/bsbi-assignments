@@ -15,14 +15,16 @@ cp "$SRC/semantic_nav_monitor/setup.py"        "$DST/setup.py"
 cp "$SRC/semantic_nav_monitor/setup.cfg"        "$DST/setup.cfg"
 cp "$SRC/semantic_nav_monitor/package.xml"        "$DST/package.xml"
 ______________________
-## Clear the cache
-pkill -9 -f gz sim server
+## Clear the cache - RUN THIS BEFORE **EVERY** LAUNCH, NOT JUST ONCE
+
+pkill -9 -f "gz sim"
 pkill -9 -f gzserver
+pkill -9 -f gzclient
 pkill -9 -f ruby
-killall -9 gz
-kill -9 35189 52740 53432 55066 55067 55101 55542 55543 55544 55546
+killall -9 gz 2>/dev/null
 ros2 daemon stop
-ps aux | grep -E "gz sim|robot_state_publisher|ros_gz_bridge|spawn"
+sleep 1
+ps aux | grep -E "gz sim|gzserver|gzclient" | grep -v grep
 rm -rf ~/.gz ~/.ignition ~/.gazebo/log
 ros2 daemon start
 ______________________

@@ -28,11 +28,12 @@
     - Each pallet obstacle is now a small stack of 2-4 boxes (visually a
       warehouse pallet stack) instead of one 0.3m cube, with a similar or
       smaller XY footprint so the waypoint/corridor geometry is unchanged.
-    - Every obstacle (pallets and pylons) sits at least ~0.58m from every
-      checkpoint marker/charging dock centre (pallets are all >=1.38m;
-      the closest pylon, pylon_left, is ~0.58m from the charging dock),
-      so obstacle avoidance always happens clear of the checkpoint itself
-      rather than right on top of it.
+    - Every obstacle (pallets and pylons) sits at least ~0.9m from every
+      checkpoint marker/charging dock centre (pallets are all >=1.38m; the
+      closest pylon, pylon_center, is 0.9m from Checkpoint 1) - roughly
+      8x the robot's own half-width - so the robot has a fully open,
+      obstacle-free landing zone to arrive at and depart from at every
+      checkpoint, and obstacle avoidance only ever happens mid-leg.
     - Pallet obstacles 2, 4, 6 and 8 are the corner stacks: measuring every
       obstacle's distance to its nearest wall (x=-2, x=5, y=-2, y=5) shows
       2/4/6/8 sit only ~1.1m from a wall (south/east/north/west
@@ -41,16 +42,16 @@
       the robot's avoidance logic to weight nearby-wall proximity so it
       doesn't turn into the wall.
     - Three small warning-pylon obstacles sit on the (0.0,0.0)->(3.0,0.0)
-      leg, straddling its centerline (y=0) at x=0.50/1.30/2.10: one offset
+      leg, straddling its centerline (y=0) at x=0.90/1.50/2.10: one offset
       left (y=+0.30), one offset right (y=-0.30), one dead-center (y=0.0).
       Each is still inside the robot's corridor half-width so the robot
       must genuinely detect and steer around them, but they are spaced
-      0.8m apart so a clear escape heading always exists past the nearest
-      pylon instead of two/three blocking every avoidance angle at once.
-      The whole trio sits at least 0.58m from the charging dock (0,0) and
-      0.9m from Checkpoint 1 (3,0) - both clear of the actual checkpoint
-      markers - versus the previous layout where the centre pylon was
-      only 0.6m from Checkpoint 1.
+      >=0.67m apart (pairwise) so a clear escape heading always exists
+      past the nearest pylon instead of two/three blocking every
+      avoidance angle at once. The whole trio sits at least 0.9m from
+      both the charging dock (0,0) and Checkpoint 1 (3,0) - well clear of
+      both checkpoint markers - versus the original layout where the
+      centre pylon was only 0.6m from Checkpoint 1.
     - The world's <physics> block sets a real_time_factor of 1.5 (with a
       matching real_time_update_rate of 1500 at the default 1ms step size)
       so the whole simulation clock, not just the robot's own speed, runs
@@ -473,7 +474,7 @@
          half-width, forcing a genuine detect-and-steer-around response. -->
     <model name="path_pylon_left">
       <static>true</static>
-      <pose>0.50 0.30 0.125 0 0 0</pose>
+      <pose>0.90 0.30 0.125 0 0 0</pose>
       <link name="link">
         <collision name="collision">
           <geometry><cylinder><radius>0.09</radius><length>0.25</length></cylinder></geometry>
@@ -487,7 +488,7 @@
 
     <model name="path_pylon_right">
       <static>true</static>
-      <pose>1.30 -0.30 0.125 0 0 0</pose>
+      <pose>1.50 -0.30 0.125 0 0 0</pose>
       <link name="link">
         <collision name="collision">
           <geometry><cylinder><radius>0.09</radius><length>0.25</length></cylinder></geometry>
