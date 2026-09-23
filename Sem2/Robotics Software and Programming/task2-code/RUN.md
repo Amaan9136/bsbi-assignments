@@ -86,15 +86,12 @@ ______________________
 ## THINGS TO MENTION IN REPORT
 
 1. Gazebo screenshots to include in the report (Task 2)
-- World overview at launch (IDLE), showing the full bay, 8 pallets, 4 checkpoint markers, green charging dock, and the robot at the dock — your uploaded screenshot is a good example of this one.
+- World overview at launch (IDLE), showing the full bay, pallets, 4 checkpoint markers, green charging dock, and the robot at the dock — your uploaded screenshot is a good example of this one.
 - Mid-mission, robot visibly navigating along a leg, mid-transit between checkpoints.
 - Robot in the act of avoiding a pallet obstacle (close to one, angled away) — pair with the terminal log showing AVOID_OBSTACLE.
 - Robot at the final checkpoint / back at the dock with MISSION_COMPLETE visible in the terminal.
-- Terminal screenshot of Shell 1 showing a full state-transition sequence (IDLE→NAVIGATE→AVOID_OBSTACLE→REPLAN→NAVIGATE→MISSION_COMPLETE).
+- Terminal screenshot of Shell 1 showing a full state-transition sequence.
 - Terminal screenshot of the final monitor_node summary block (time, distance, obstacle-encounter count, time-per-state).
-- Terminal screenshot of Shell 2 (keyboard_hri_node) showing the s/p/x commands being published.
+- Terminal screenshot of Shell 2 (keyboard_hri_node) showing the commands being published. (mention about s/v/p/x)
 
 2. a Cartesian check, not an angular one. also tightened the odometry-based stall fallback so it catches a true block faster (2.0s → 1.0s) rather than relying solely on LIDAR.
-
-3. an note if needed: The LIDAR rays frozen at the charging pad — this one's a genuine Gazebo GUI limitation, not our code.
-robot mesh visibly moves correctly, but the ray fan stays anchored at spawn — that's a documented failure mode of Gazebo's "Visualize Lidar" plugin: it looks up the sensor's live pose by entity name each frame, and when running server (-s) and GUI (-g) as separate processes (our default setup), that lookup can go stale over the network scene-sync and freeze at the last good pose
